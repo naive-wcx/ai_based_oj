@@ -1,0 +1,206 @@
+package handler
+
+import (
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+	"oj-system/internal/middleware"
+	"oj-system/internal/model"
+	"oj-system/internal/service"
+)
+
+type ProblemHandler struct {
+	service *service.ProblemService
+}
+
+func NewProblemHandler() *ProblemHandler {
+	return &ProblemHandler{
+		service: service.NewProblemService(),
+	}
+}
+
+// List 获取题目列表
+// GET /api/v1/problem/list
+func (h *ProblemHandler) List(c *gin.Context) {
+	page := getIntQuery(c, "page", 1)
+	size := getIntQuery(c, "size", 20)
+	difficulty := c.Query("difficulty")
+	tag := c.Query("tag")
+	keyword := c.Query("keyword")
+
+	problems, total, err := h.service.List(page, size, difficulty, tag, keyword)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, model.ServerError("获取题目列表失败"))
+		return
+	}
+
+	c.JSON(http.StatusOK, model.Success(&model.PageData{
+		Total: total,
+		Page:  page,
+		Size:  size,
+		List:  problems,
+	}))
+}
+
+// GetByID 获取题目详情
+// GET /api/v1/problem/:id
+func (h *ProblemHandler) GetByID(c *gin.Context) {
+	id := getUintParam(c, "id")
+	if id == 0 {
+		c.JSON(http.StatusBadRequest, model.BadRequest("题目 ID 无效"))
+		return
+	}
+
+	problem, err := h.service.GetByID(id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, model.NotFound(err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, model.Success(problem))
+}
+
+// Create 创建题目（管理员）
+// POST /api/v1/problem
+func (h *ProblemHandler) Create(c *gin.Context) {
+	var req model.ProblemCreateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, model.BadRequest("参数错误: "+err.Error()))
+		return
+	}
+
+	userID := middleware.GetUserID(c)
+	problem, err := h.service.Create(&req, userID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, model.BadRequest(err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, model.Success(problem))
+}
+
+// Update 更新题目（管理员）
+// PUT /api/v1/problem/:id
+func (h *ProblemHandler) Update(c *gin.Context) {
+	id := getUintParam(c, "id")
+	if id == 0 {
+		c.JSON(http.StatusBadRequest, model.BadRequest("题目 ID 无效"))
+		return
+	}
+
+	var req model.ProblemCreateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, model.BadRequest("参数错误: "+err.Error()))
+		return
+	}
+
+	problem, err := h.service.Update(id, &req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, model.BadRequest(err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, model.Success(problem))
+}
+
+// Delete 删除题目（管理员）
+// DELETE /api/v1/problem/:id
+func (h *ProblemHandler) Delete(c *gin.Context) {
+	id := getUintParam(c, "id")
+	if id == 0 {
+		c.JSON(http.StatusBadRequest, model.BadRequest("题目 ID 无效"))
+		return
+	}
+
+	if err := h.service.Delete(id); err != nil {
+		c.JSON(http.StatusBadRequest, model.BadRequest(err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, model.SuccessMessage("删除成功", nil))
+}
+
+// UploadTestcase 上传测试用例（管理员）
+// POST /api/v1/problem/:id/testcase
+func (h *ProblemHandler) UploadTestcase(c *gin.Context) {
+	id := getUintParam(c, "id")
+	if id == 0 {
+		c.JSON(http.StatusBadRequest, model.BadRequest("题目 ID 无效"))
+		return
+	}
+
+	// 获取上传的文件
+	inputFile, err := c.FormFile("input")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, model.BadRequest("请上传输入文件"))
+		return
+	}
+
+	outputFile, err := c.FormFile("output")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, model.BadRequest("请上传输出文件"))
+		return
+	}
+
+	// 打开文件
+	inputReader, err := inputFile.Open()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, model.BadRequest("无法读取输入文件"))
+		return
+	}
+	defer inputReader.Close()
+
+	outputReader, err := outputFile.Open()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, model.BadRequest("无法读取输出文件"))
+		return
+	}
+	defer outputReader.Close()
+
+	// 获取分数
+	score := getIntFormValue(c, "score", 10)
+	isSample := c.PostForm("is_sample") == "true"
+
+	// 添加测试用例
+	if err := h.service.AddTestcase(id, inputReader, outputReader, score, isSample); err != nil {
+		c.JSON(http.StatusBadRequest, model.BadRequest(err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, model.SuccessMessage("上传成功", nil))
+}
+
+// GetTestcases 获取测试用例列表（管理员）
+// GET /api/v1/problem/:id/testcases
+func (h *ProblemHandler) GetTestcases(c *gin.Context) {
+	id := getUintParam(c, "id")
+	if id == 0 {
+		c.JSON(http.StatusBadRequest, model.BadRequest("题目 ID 无效"))
+		return
+	}
+
+	testcases, err := h.service.GetTestcases(id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, model.ServerError("获取测试用例失败"))
+		return
+	}
+
+	c.JSON(http.StatusOK, model.Success(testcases))
+}
+
+// DeleteTestcases 删除所有测试用例（管理员）
+// DELETE /api/v1/problem/:id/testcases
+func (h *ProblemHandler) DeleteTestcases(c *gin.Context) {
+	id := getUintParam(c, "id")
+	if id == 0 {
+		c.JSON(http.StatusBadRequest, model.BadRequest("题目 ID 无效"))
+		return
+	}
+
+	if err := h.service.DeleteTestcases(id); err != nil {
+		c.JSON(http.StatusBadRequest, model.BadRequest(err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, model.SuccessMessage("删除成功", nil))
+}

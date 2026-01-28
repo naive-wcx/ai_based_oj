@@ -1,0 +1,31 @@
+# 生产环境配置文件
+# 复制到 config.yaml 并根据实际情况修改
+
+server:
+  port: 8080
+  mode: release
+
+database:
+  driver: sqlite
+  path: /opt/oj/data/db/oj.db
+
+judge:
+  sandbox: simple  # 生产环境建议使用 isolate
+  workers: 1       # 2核服务器建议设置为 1
+  timeout: 30
+
+ai:
+  enabled: true
+  provider: deepseek
+  api_key: ${DEEPSEEK_API_KEY}
+  api_url: https://api.deepseek.com/v1/chat/completions
+  model: deepseek-chat
+  timeout: 60
+
+paths:
+  problems: /opt/oj/data/problems
+  submissions: /opt/oj/data/submissions
+
+jwt:
+  secret: ${JWT_SECRET}
+  expire: 72h

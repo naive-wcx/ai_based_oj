@@ -1,0 +1,26 @@
+[Unit]
+Description=OJ Backend Service
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/oj
+ExecStart=/opt/oj/oj-server -config /opt/oj/configs/config.yaml
+Restart=always
+RestartSec=5
+
+# 环境变量
+EnvironmentFile=/opt/oj/.env
+
+# 日志
+StandardOutput=append:/var/log/oj/oj.log
+StandardError=append:/var/log/oj/oj-error.log
+
+# 资源限制（适用于小型服务器）
+MemoryLimit=512M
+CPUQuota=100%
+
+[Install]
+WantedBy=multi-user.target

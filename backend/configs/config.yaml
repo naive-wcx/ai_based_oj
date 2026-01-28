@@ -1,0 +1,29 @@
+server:
+  port: 8080
+  mode: debug  # debug, release
+
+database:
+  driver: sqlite
+  path: ./data/oj.db
+
+judge:
+  sandbox: simple  # simple, isolate, docker
+  workers: 2
+  timeout: 30  # 秒
+  
+# AI 设置已移至管理后台，此处配置仅作为初始默认值
+ai:
+  enabled: false
+  provider: deepseek
+  api_key: ""
+  api_url: https://api.deepseek.com/v1/chat/completions
+  model: deepseek-chat
+  timeout: 60
+
+paths:
+  problems: ./data/problems
+  submissions: ./data/submissions
+
+jwt:
+  secret: ${JWT_SECRET}
+  expire: 72h
