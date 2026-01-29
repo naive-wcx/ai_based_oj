@@ -1,4 +1,4 @@
-# A toy project written by Opus4.5 and Codex
+# A toy project written by Opus4.5, Codex and Gemini
 
 # OJ 在线评测系统
 
@@ -120,6 +120,12 @@ AI 判题的 API Key **不再需要通过环境变量配置**，可以在运行�
 
 > 提示：SQLite 驱动依赖 CGO，建议在 Linux 环境构建后端（需要 gcc）。
 
+**初次部署可以直接运行下面的命令**
+
+```bash
+bash deploy/scripts/deploy_fresh_local.sh <server> <domain> user port
+```
+
 1. **构建后端**
 ```bash
 cd backend
@@ -155,6 +161,27 @@ nginx -t && systemctl reload nginx
 ```
 
 详细部署说明请参考 `PROJECT_DESIGN.md`。
+
+## 更迭
+
+### 本地
+
+```bash
+bash start-backend.sh
+bash start-frontend.sh
+```
+
+### 服务器
+
+```
+cd backend && CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o oj-server ./cmd/server
+
+cd frontend && npm run build
+
+scp ./backend/oj-server <user@server>:/opt/oj/
+ssh <user@server> "rm -rf /opt/oj/static/*"
+scp -r ./frontend/dist/* <user@server>:/opt/oj/static/
+```
 
 ## AI 判题功能
 

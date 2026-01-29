@@ -89,6 +89,7 @@ func (c *DeepSeekClient) AnalyzeCode(problem *model.Problem, code string, langua
 			Enabled: true,
 			Passed:  true,
 			Reason:  "AI 判题功能未启用",
+			Summary: "AI 判题功能未启用",
 		}, nil
 	}
 	
@@ -98,6 +99,7 @@ func (c *DeepSeekClient) AnalyzeCode(problem *model.Problem, code string, langua
 			Enabled: true,
 			Passed:  true,
 			Reason:  "AI 判题未配置 API Key，已跳过",
+			Summary: "AI 判题未配置 API Key，已跳过",
 		}, nil
 	}
 
@@ -127,7 +129,7 @@ func (c *DeepSeekClient) AnalyzeCode(problem *model.Problem, code string, langua
 			Enabled:     true,
 			Passed:      true, // 出错时默认通过，不影响正常判题
 			Reason:      fmt.Sprintf("AI 分析出错: %v", err),
-			RawResponse: "",
+			Summary:     fmt.Sprintf("AI 分析出错: %v", err),
 		}, nil
 	}
 
@@ -255,7 +257,7 @@ func parseAIResponse(response string, aiConfig *model.AIJudgeConfig) (*model.AIJ
 			Enabled:     true,
 			Passed:      true, // 解析失败时默认通过
 			Reason:      fmt.Sprintf("AI 响应解析失败: %v", err),
-			RawResponse: response,
+			Summary:     fmt.Sprintf("AI 响应解析失败: %v", err),
 		}, nil
 	}
 
@@ -265,7 +267,7 @@ func parseAIResponse(response string, aiConfig *model.AIJudgeConfig) (*model.AIJ
 		AlgorithmDetected: analysis.AlgorithmAnalysis.PrimaryAlgorithm,
 		LanguageCheck:     "passed",
 		Reason:            analysis.Summary,
-		RawResponse:       response,
+		Summary:           analysis.Summary,
 	}
 
 	if !analysis.RequirementCheck.LanguageMatch {

@@ -24,9 +24,33 @@ func (r *SubmissionRepository) Create(submission *model.Submission) error {
 // GetByID 根据 ID 获取提交记录
 func (r *SubmissionRepository) GetByID(id uint) (*model.Submission, error) {
 	var submission model.Submission
-	if err := r.db.First(&submission, id).Error; err != nil {
+	var problemTitle, username string
+
+	row := r.db.Table("submissions").
+		Select(
+			"submissions.id, submissions.problem_id, submissions.user_id, submissions.language, submissions.code, " +
+				"submissions.status, submissions.time_used, submissions.memory_used, submissions.score, " +
+				"submissions.testcase_results, submissions.ai_judge_result, submissions.compile_error, " +
+				"submissions.final_message, submissions.created_at, problems.title as problem_title, users.username as username",
+		).
+		Joins("LEFT JOIN problems ON submissions.problem_id = problems.id").
+		Joins("LEFT JOIN users ON submissions.user_id = users.id").
+		Where("submissions.id = ?", id).
+		Row()
+	if err := row.Scan(
+		&submission.ID, &submission.ProblemID, &submission.UserID,
+		&submission.Language, &submission.Code, &submission.Status,
+		&submission.TimeUsed, &submission.MemoryUsed, &submission.Score,
+		&submission.TestcaseResults, &submission.AIJudgeResult,
+		&submission.CompileError, &submission.FinalMessage, &submission.CreatedAt,
+		&problemTitle, &username,
+	); err != nil {
 		return nil, err
 	}
+
+	submission.ProblemTitle = problemTitle
+	submission.Username = username
+
 	return &submission, nil
 }
 
@@ -55,7 +79,11 @@ func (r *SubmissionRepository) List(page, size int, problemID, userID uint, stat
 	query.Count(&total)
 
 	offset := (page - 1) * size
-	rows, err := query.Select("submissions.*, problems.title as problem_title, users.username").
+	rows, err := query.Select(
+		"submissions.id, submissions.problem_id, submissions.user_id, submissions.language, submissions.status, " +
+			"submissions.time_used, submissions.memory_used, submissions.score, submissions.created_at, " +
+			"problems.title as problem_title, users.username as username",
+	).
 		Joins("LEFT JOIN problems ON submissions.problem_id = problems.id").
 		Joins("LEFT JOIN users ON submissions.user_id = users.id").
 		Offset(offset).Limit(size).Order("submissions.id DESC").Rows()
@@ -66,32 +94,13 @@ func (r *SubmissionRepository) List(page, size int, problemID, userID uint, stat
 
 	for rows.Next() {
 		var item model.SubmissionListItem
-		var submission model.Submission
-		var problemTitle, username string
-		
 		if err := rows.Scan(
-			&submission.ID, &submission.ProblemID, &submission.UserID,
-			&submission.Language, &submission.Code, &submission.Status,
-			&submission.TimeUsed, &submission.MemoryUsed, &submission.Score,
-			&submission.TestcaseResults, &submission.AIJudgeResult,
-			&submission.CompileError, &submission.FinalMessage, &submission.CreatedAt,
-			&problemTitle, &username,
+			&item.ID, &item.ProblemID, &item.UserID,
+			&item.Language, &item.Status,
+			&item.TimeUsed, &item.MemoryUsed, &item.Score,
+			&item.CreatedAt, &item.ProblemTitle, &item.Username,
 		); err != nil {
 			continue
-		}
-		
-		item = model.SubmissionListItem{
-			ID:           submission.ID,
-			ProblemID:    submission.ProblemID,
-			ProblemTitle: problemTitle,
-			UserID:       submission.UserID,
-			Username:     username,
-			Language:     submission.Language,
-			Status:       submission.Status,
-			TimeUsed:     submission.TimeUsed,
-			MemoryUsed:   submission.MemoryUsed,
-			Score:        submission.Score,
-			CreatedAt:    submission.CreatedAt,
 		}
 		items = append(items, item)
 	}

@@ -58,10 +58,10 @@
       </div>
     </div>
     
-    <!-- 展开原始响应（调试用） -->
-    <el-collapse v-if="result.raw_response" class="raw-response">
-      <el-collapse-item title="查看 AI 原始响应（调试）">
-        <pre>{{ formatJson(result.raw_response) }}</pre>
+    <!-- 展开 AI 总结 -->
+    <el-collapse v-if="result.summary || result.reason" class="raw-response">
+      <el-collapse-item title="查看 AI 总结">
+        <pre>{{ result.summary || result.reason }}</pre>
       </el-collapse-item>
     </el-collapse>
   </div>
@@ -81,13 +81,6 @@ function getConfidenceColor(confidence) {
   return '#f56c6c'
 }
 
-function formatJson(str) {
-  try {
-    return JSON.stringify(JSON.parse(str), null, 2)
-  } catch {
-    return str
-  }
-}
 </script>
 
 <style lang="scss" scoped>

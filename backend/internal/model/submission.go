@@ -35,6 +35,8 @@ type Submission struct {
 	CompileError    string            `json:"compile_error" gorm:"type:text"`
 	FinalMessage    string            `json:"final_message" gorm:"type:text"`
 	CreatedAt       time.Time         `json:"created_at"`
+	ProblemTitle    string            `json:"problem_title" gorm:"-"`
+	Username        string            `json:"username" gorm:"-"`
 
 	// 关联字段（不存储）
 	Problem  *Problem `json:"problem,omitempty" gorm:"-"`
@@ -81,8 +83,8 @@ type AIJudgeResult struct {
 	AlgorithmDetected string            `json:"algorithm_detected,omitempty"`
 	LanguageCheck     string            `json:"language_check,omitempty"`
 	Reason            string            `json:"reason,omitempty"`
+	Summary           string            `json:"summary,omitempty"`
 	Details           *AIJudgeDetails   `json:"details,omitempty"`
-	RawResponse       string            `json:"raw_response,omitempty"`
 }
 
 // AIJudgeDetails AI 判题详细信息
