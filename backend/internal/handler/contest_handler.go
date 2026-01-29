@@ -201,7 +201,7 @@ func (h *ContestHandler) ExportLeaderboard(c *gin.Context) {
 		return
 	}
 
-	contest, problemIDs, entries, err := h.service.GetLeaderboard(contestID)
+	_, problemIDs, entries, err := h.service.GetLeaderboard(contestID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, model.BadRequest(err.Error()))
 		return

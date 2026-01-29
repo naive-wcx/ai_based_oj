@@ -38,11 +38,15 @@
             <el-input
               v-model="form.api_key"
               type="password"
-              show-password
+              :show-password="!isMaskedKey"
               placeholder="请输入 API Key"
               style="width: 400px"
             />
+            <el-button v-if="isMaskedKey" text class="inline-action" @click="clearApiKey">
+              重新输入
+            </el-button>
             <div class="form-tip">
+              <div v-if="isMaskedKey">已保存的 API Key 出于安全不会显示，需修改请点击“重新输入”。</div>
               <template v-if="form.provider === 'deepseek'">
                 前往 <a href="https://platform.deepseek.com/" target="_blank">DeepSeek 开放平台</a> 获取 API Key
               </template>
@@ -91,7 +95,7 @@
           <el-button type="primary" :loading="saving" @click="handleSave">
             保存设置
           </el-button>
-          <el-button :loading="testing" @click="handleTest" :disabled="!form.api_key || form.api_key === '********'">
+          <el-button :loading="testing" @click="handleTest" :disabled="!canTest">
             测试连接
           </el-button>
         </el-form-item>
@@ -128,7 +132,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { adminApi } from '@/api/admin'
 
@@ -144,6 +148,13 @@ const form = reactive({
   model: 'deepseek-chat',
   timeout: 60,
 })
+
+const isMaskedKey = computed(() => form.api_key === '********')
+const canTest = computed(() => form.enabled && !!form.api_key)
+
+function clearApiKey() {
+  form.api_key = ''
+}
 
 async function fetchSettings() {
   loading.value = true
@@ -237,6 +248,10 @@ onMounted(() => {
   a {
     color: #409eff;
   }
+}
+
+.inline-action {
+  margin-left: 8px;
 }
 
 .help-content {

@@ -805,6 +805,8 @@ components/
 
 ### 10.1 服务器环境准备
 
+以下命令在 Debian 12 / Ubuntu 20.04+ 适用。
+
 ```bash
 # 1. 更新系统
 sudo apt update && sudo apt upgrade -y
@@ -813,7 +815,9 @@ sudo apt update && sudo apt upgrade -y
 sudo apt install -y nginx sqlite3 git
 
 # 3. 安装编译器（用于判题）
-sudo apt install -y gcc g++ python3 default-jdk
+sudo apt install -y gcc g++ python3
+# 如需 Java 判题再安装 JDK
+sudo apt install -y default-jdk
 
 # 4. 安装 isolate 沙箱（推荐）
 sudo apt install -y isolate
@@ -845,17 +849,31 @@ After=network.target
 [Service]
 Type=simple
 User=www-data
+Group=www-data
 WorkingDirectory=/opt/oj
-ExecStart=/opt/oj/oj-server
+ExecStart=/opt/oj/oj-server -config /opt/oj/configs/config.yaml
 Restart=always
 RestartSec=5
-Environment=GIN_MODE=release
+
+# 环境变量
+EnvironmentFile=/opt/oj/.env
+
+# 日志
+StandardOutput=append:/var/log/oj/oj.log
+StandardError=append:/var/log/oj/oj-error.log
+
+# 资源限制（适用于小型服务器）
+MemoryLimit=512M
+CPUQuota=100%
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-# 4. 启动服务
+# 4. 创建日志目录并启动服务
+sudo mkdir -p /var/log/oj
+sudo chown -R www-data:www-data /var/log/oj /opt/oj
+
 sudo systemctl daemon-reload
 sudo systemctl enable oj
 sudo systemctl start oj

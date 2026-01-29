@@ -112,16 +112,18 @@ AI 判题的 API Key **不再需要通过环境变量配置**，可以在运行�
 
 ### 服务器要求
 
-- Linux (Ubuntu 20.04+)
+- Linux (Debian 12 / Ubuntu 20.04+)
 - 2核 2G 内存（最低配置）
 - 公网 IP / 域名
 
 ### 部署步骤
 
+> 提示：SQLite 驱动依赖 CGO，建议在 Linux 环境构建后端（需要 gcc）。
+
 1. **构建后端**
 ```bash
 cd backend
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o oj-server ./cmd/server
+CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o oj-server ./cmd/server
 ```
 
 2. **构建前端**
