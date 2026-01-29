@@ -1,7 +1,7 @@
 <template>
   <div class="home">
     <section class="hero">
-      <h1>OJ 在线评测系统</h1>
+      <h1>USTC OJ 在线评测系统</h1>
       <p class="subtitle">支持 AI 智能判题的现代化编程练习平台</p>
       <div class="hero-actions">
         <el-button type="primary" size="large" @click="$router.push('/problems')">
@@ -43,7 +43,7 @@
       </div>
       <div class="stat-item">
         <div class="stat-value">{{ stats.users || 0 }}</div>
-        <div class="stat-label">注册用户</div>
+        <div class="stat-label">用户数</div>
       </div>
       <div class="stat-item">
         <div class="stat-value">{{ stats.submissions || 0 }}</div>
@@ -55,11 +55,25 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { statisticsApi } from '@/api/statistics'
 
 const stats = ref({
   problems: 0,
   users: 0,
   submissions: 0,
+})
+
+async function fetchStats() {
+  try {
+    const res = await statisticsApi.getPublic()
+    stats.value = res.data || stats.value
+  } catch (e) {
+    console.error(e)
+  }
+}
+
+onMounted(() => {
+  fetchStats()
 })
 </script>
 

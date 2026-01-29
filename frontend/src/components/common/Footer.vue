@@ -1,7 +1,7 @@
 <template>
   <footer class="footer">
     <div class="footer-content">
-      <p>OJ 在线评测系统 - 支持 AI 智能判题</p>
+      <p>USTC OJ 在线评测系统 - 支持 AI 智能判题</p>
       <p class="copyright">© {{ year }} All Rights Reserved</p>
     </div>
   </footer>

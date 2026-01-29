@@ -28,6 +28,18 @@ func (r *ProblemRepository) GetByID(id uint) (*model.Problem, error) {
 	return &problem, nil
 }
 
+// GetByIDs 根据 ID 列表获取题目
+func (r *ProblemRepository) GetByIDs(ids []uint) ([]model.Problem, error) {
+	if len(ids) == 0 {
+		return []model.Problem{}, nil
+	}
+	var problems []model.Problem
+	if err := r.db.Where("id IN ?", ids).Find(&problems).Error; err != nil {
+		return nil, err
+	}
+	return problems, nil
+}
+
 // Update 更新题目
 func (r *ProblemRepository) Update(problem *model.Problem) error {
 	return r.db.Save(problem).Error
@@ -101,4 +113,13 @@ func (r *ProblemRepository) IncrementSubmitCount(problemID uint) error {
 func (r *ProblemRepository) IncrementAcceptedCount(problemID uint) error {
 	return r.db.Model(&model.Problem{}).Where("id = ?", problemID).
 		UpdateColumn("accepted_count", gorm.Expr("accepted_count + 1")).Error
+}
+
+// CountPublic 获取公开题目数量
+func (r *ProblemRepository) CountPublic() (int64, error) {
+	var count int64
+	if err := r.db.Model(&model.Problem{}).Where("is_public = ?", true).Count(&count).Error; err != nil {
+		return 0, err
+	}
+	return count, nil
 }

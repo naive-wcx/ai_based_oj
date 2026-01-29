@@ -13,6 +13,10 @@
           <el-icon><Document /></el-icon>
           <span>题目管理</span>
         </el-menu-item>
+        <el-menu-item index="/admin/contests">
+          <el-icon><Trophy /></el-icon>
+          <span>比赛管理</span>
+        </el-menu-item>
         <el-menu-item index="/admin/users">
           <el-icon><User /></el-icon>
           <span>用户管理</span>
@@ -33,7 +37,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { Document, User } from '@element-plus/icons-vue'
+import { Document, User, Setting, Trophy } from '@element-plus/icons-vue'
 
 const route = useRoute()
 

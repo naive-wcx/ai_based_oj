@@ -27,8 +27,9 @@ func (h *ProblemHandler) List(c *gin.Context) {
 	difficulty := c.Query("difficulty")
 	tag := c.Query("tag")
 	keyword := c.Query("keyword")
+	userID := middleware.GetUserID(c)
 
-	problems, total, err := h.service.List(page, size, difficulty, tag, keyword)
+	problems, total, err := h.service.ListWithUser(page, size, difficulty, tag, keyword, userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, model.ServerError("获取题目列表失败"))
 		return
@@ -51,7 +52,8 @@ func (h *ProblemHandler) GetByID(c *gin.Context) {
 		return
 	}
 
-	problem, err := h.service.GetByID(id)
+	userID := middleware.GetUserID(c)
+	problem, err := h.service.GetByIDWithUser(id, userID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, model.NotFound(err.Error()))
 		return

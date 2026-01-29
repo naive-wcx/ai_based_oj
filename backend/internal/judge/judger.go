@@ -104,7 +104,13 @@ func (j *Judger) Handle(task *queue.JudgeTask) {
 	}
 
 	// 计算得分
-	submission.Score = j.calculateScore(testcaseResults, submission.Status == model.StatusAccepted)
+	baseScore := j.calculateScore(testcaseResults, submission.Status == model.StatusAccepted)
+	if submission.AIJudgeResult != nil && !submission.AIJudgeResult.Passed {
+		if baseScore > 50 {
+			baseScore = 50
+		}
+	}
+	submission.Score = baseScore
 
 	// 保存结果
 	if err := j.submissionService.UpdateResult(submission); err != nil {

@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"time"
+
 	"oj-system/internal/model"
 
 	"gorm.io/gorm"
@@ -129,4 +131,99 @@ func (r *SubmissionRepository) GetUserSubmissionCount(userID, problemID uint) in
 		Where("user_id = ? AND problem_id = ?", userID, problemID).
 		Count(&count)
 	return count
+}
+
+// CountAll 获取提交总数
+func (r *SubmissionRepository) CountAll() (int64, error) {
+	var count int64
+	if err := r.db.Model(&model.Submission{}).Count(&count).Error; err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+// ListForContest 获取比赛期间相关提交
+func (r *SubmissionRepository) ListForContest(problemIDs []uint, startAt, endAt time.Time) ([]model.ContestSubmission, error) {
+	if len(problemIDs) == 0 {
+		return []model.ContestSubmission{}, nil
+	}
+
+	var submissions []model.ContestSubmission
+	err := r.db.Table("submissions").
+		Select("submissions.user_id, submissions.problem_id, submissions.score, submissions.created_at, users.username, users.`group` as user_group").
+		Joins("LEFT JOIN users ON submissions.user_id = users.id").
+		Where("submissions.problem_id IN ?", problemIDs).
+		Where("submissions.created_at >= ? AND submissions.created_at <= ?", startAt, endAt).
+		Order("submissions.created_at ASC").
+		Scan(&submissions).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	return submissions, nil
+}
+
+// GetAcceptedProblemIDs 获取用户已通过的题目 ID 列表
+func (r *SubmissionRepository) GetAcceptedProblemIDs(userID uint, problemIDs []uint) ([]uint, error) {
+	if userID == 0 || len(problemIDs) == 0 {
+		return []uint{}, nil
+	}
+	var ids []uint
+	err := r.db.Model(&model.Submission{}).
+		Where("user_id = ? AND status = ?", userID, model.StatusAccepted).
+		Where("problem_id IN ?", problemIDs).
+		Distinct().
+		Pluck("problem_id", &ids).Error
+	if err != nil {
+		return nil, err
+	}
+	return ids, nil
+}
+
+// GetAcceptedProblemIDsInRange 获取用户在时间范围内通过的题目 ID 列表
+func (r *SubmissionRepository) GetAcceptedProblemIDsInRange(userID uint, problemIDs []uint, startAt, endAt time.Time) ([]uint, error) {
+	if userID == 0 || len(problemIDs) == 0 {
+		return []uint{}, nil
+	}
+	var ids []uint
+	err := r.db.Model(&model.Submission{}).
+		Where("user_id = ? AND status = ?", userID, model.StatusAccepted).
+		Where("problem_id IN ?", problemIDs).
+		Where("created_at >= ? AND created_at <= ?", startAt, endAt).
+		Distinct().
+		Pluck("problem_id", &ids).Error
+	if err != nil {
+		return nil, err
+	}
+	return ids, nil
+}
+
+// GetUserBestScoresInRange 获取用户在时间范围内每题最高分
+func (r *SubmissionRepository) GetUserBestScoresInRange(userID uint, problemIDs []uint, startAt, endAt time.Time) (map[uint]int, error) {
+	if userID == 0 || len(problemIDs) == 0 {
+		return map[uint]int{}, nil
+	}
+
+	type row struct {
+		ProblemID uint `gorm:"column:problem_id"`
+		Score     int  `gorm:"column:score"`
+	}
+
+	var rows []row
+	err := r.db.Model(&model.Submission{}).
+		Select("problem_id, MAX(score) as score").
+		Where("user_id = ? AND problem_id IN ?", userID, problemIDs).
+		Where("created_at >= ? AND created_at <= ?", startAt, endAt).
+		Group("problem_id").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[uint]int, len(rows))
+	for _, r := range rows {
+		result[r.ProblemID] = r.Score
+	}
+	return result, nil
 }

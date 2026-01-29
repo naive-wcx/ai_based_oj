@@ -59,5 +59,5 @@ func RateLimitMiddleware(limit int, window time.Duration) gin.HandlerFunc {
 
 // SubmitRateLimitMiddleware 提交限流（更严格）
 func SubmitRateLimitMiddleware() gin.HandlerFunc {
-	return RateLimitMiddleware(10, time.Minute) // 每分钟最多 10 次提交
+	return RateLimitMiddleware(1, 10*time.Second) // 每 10 秒最多 1 次提交
 }

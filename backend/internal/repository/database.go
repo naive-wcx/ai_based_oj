@@ -42,6 +42,7 @@ func InitDatabase(cfg *config.DatabaseConfig) error {
 func autoMigrate() error {
 	return DB.AutoMigrate(
 		&model.User{},
+		&model.Contest{},
 		&model.Problem{},
 		&model.Testcase{},
 		&model.Submission{},

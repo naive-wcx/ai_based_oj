@@ -91,3 +91,12 @@ func (r *UserRepository) ExistsByEmail(email string) bool {
 	r.db.Model(&model.User{}).Where("email = ?", email).Count(&count)
 	return count > 0
 }
+
+// CountAll 获取用户总数
+func (r *UserRepository) CountAll() (int64, error) {
+	var count int64
+	if err := r.db.Model(&model.User{}).Count(&count).Error; err != nil {
+		return 0, err
+	}
+	return count, nil
+}

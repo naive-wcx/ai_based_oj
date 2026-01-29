@@ -8,6 +8,7 @@
           <div class="header-tags">
             <DifficultyBadge :difficulty="problem.difficulty" />
             <el-tag v-for="tag in problem.tags" :key="tag" size="small">{{ tag }}</el-tag>
+            <el-tag v-if="problem.has_accepted" type="success" size="small">已通过</el-tag>
             <span v-if="problem.ai_judge_config?.enabled" class="ai-badge">AI 判题</span>
           </div>
         </div>

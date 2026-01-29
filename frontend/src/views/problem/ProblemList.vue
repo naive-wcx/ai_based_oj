@@ -34,6 +34,7 @@
             <router-link :to="`/problem/${row.id}`" class="problem-title">
               {{ row.title }}
               <span v-if="row.has_ai_judge" class="ai-badge">AI</span>
+              <el-tag v-if="row.has_accepted" type="success" size="small">已通过</el-tag>
             </router-link>
           </template>
         </el-table-column>

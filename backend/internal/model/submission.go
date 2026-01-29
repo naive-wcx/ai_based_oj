@@ -135,3 +135,13 @@ type SubmissionListItem struct {
 	Score      int       `json:"score"`
 	CreatedAt  time.Time `json:"created_at"`
 }
+
+// ContestSubmission 比赛统计用提交记录
+type ContestSubmission struct {
+	UserID    uint      `json:"user_id" gorm:"column:user_id"`
+	Username  string    `json:"username" gorm:"column:username"`
+	Group     string    `json:"group" gorm:"column:user_group"`
+	ProblemID uint      `json:"problem_id" gorm:"column:problem_id"`
+	Score     int       `json:"score" gorm:"column:score"`
+	CreatedAt time.Time `json:"created_at" gorm:"column:created_at"`
+}

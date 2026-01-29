@@ -123,6 +123,7 @@ type User struct {
     PasswordHash string    `json:"-"`          // 不输出到 JSON
     StudentID    string    `json:"student_id"`
     Role         string    `json:"role"`       // "user" | "admin"
+    Group        string    `json:"group"`
     SolvedCount  int       `json:"solved_count"`
     SubmitCount  int       `json:"submit_count"`
     CreatedAt    time.Time `json:"created_at"`
@@ -131,7 +132,9 @@ type User struct {
 ```
 
 **请求/响应结构**:
-- `UserRegisterRequest` - 注册请求
+- `AdminCreateUserRequest` - 管理员创建用户请求
+- `AdminCreateUsersRequest` - 管理员批量创建用户请求
+- `AdminUpdateUserRequest` - 管理员更新用户请求
 - `UserLoginRequest` - 登录请求
 - `UserLoginResponse` - 登录响应（含 token）
 - `UserInfo` - 用户信息（不含密码）
@@ -155,6 +158,7 @@ type Problem struct {
     CreatedBy     uint           `json:"created_by"`
     SubmitCount   int            `json:"submit_count"`
     AcceptedCount int            `json:"accepted_count"`
+    HasAccepted   bool           `json:"has_accepted"`
 }
 
 type AIJudgeConfig struct {
@@ -359,7 +363,9 @@ func NewUserService() *UserService
 
 | 方法 | 说明 |
 |------|------|
-| `Register(req *UserRegisterRequest) (*User, error)` | 注册（检查重复、密码加密） |
+| `CreateUserByAdmin(req *AdminCreateUserRequest) (*User, error)` | 管理员创建用户（检查重复、密码加密） |
+| `CreateUsersBatch(req *AdminCreateUsersRequest) (int, []map[string]interface{})` | 管理员批量创建用户 |
+| `UpdateUserByAdmin(userID uint, req *AdminUpdateUserRequest) (*User, error)` | 管理员更新用户信息 |
 | `Login(req *UserLoginRequest) (*UserLoginResponse, error)` | 登录（验证密码、生成 Token） |
 | `GetProfile(userID uint) (*UserInfo, error)` | 获取个人信息 |
 | `UpdateProfile(userID uint, email, studentID string) error` | 更新个人信息 |
@@ -506,37 +512,7 @@ type Claims struct {
 
 ### 3.1 用户模块 `/api/v1/user`
 
-#### POST `/register` - 用户注册
-
-**请求体**:
-```json
-{
-    "username": "string",     // 3-20 字符，必填
-    "email": "string",        // 邮箱格式，必填
-    "password": "string",     // 6-20 字符，必填
-    "student_id": "string"    // 可选
-}
-```
-
-**成功响应** (200):
-```json
-{
-    "code": 200,
-    "message": "success",
-    "data": {
-        "id": 1,
-        "username": "testuser",
-        "email": "test@example.com",
-        "student_id": "",
-        "role": "user",
-        "solved_count": 0,
-        "submit_count": 0
-    }
-}
-```
-
-**错误响应**:
-- 400: 参数错误 / 用户名已存在 / 邮箱已被注册
+**账号分配说明**：普通用户账号由管理员在后台创建与分配，客户端不再提供注册入口。
 
 ---
 
@@ -628,6 +604,7 @@ type Claims struct {
 | `difficulty` | string | 难度筛选：easy/medium/hard |
 | `tag` | string | 标签筛选 |
 | `keyword` | string | 关键词搜索 |
+**说明**: 登录状态下会返回 `has_accepted` 标识用户是否已通过题目
 
 **成功响应** (200):
 ```json
@@ -646,7 +623,8 @@ type Claims struct {
                 "tags": ["数组", "哈希表"],
                 "submit_count": 1000,
                 "accepted_count": 500,
-                "has_ai_judge": true
+                "has_ai_judge": true,
+                "has_accepted": true
             }
         ]
     }
@@ -658,6 +636,7 @@ type Claims struct {
 #### GET `/:id` - 获取题目详情
 
 **路径参数**: `id` - 题目 ID
+**说明**: 登录状态下会返回 `has_accepted` 标识用户是否已通过题目
 
 **成功响应** (200):
 ```json
@@ -667,6 +646,7 @@ type Claims struct {
     "data": {
         "id": 1,
         "title": "两数之和",
+        "has_accepted": true,
         "description": "给定一个整数数组...",
         "input_format": "第一行输入...",
         "output_format": "输出...",
@@ -912,7 +892,239 @@ type Claims struct {
 
 ---
 
-### 3.5 管理模块 `/api/v1/admin`
+### 3.5 比赛模块 `/api/v1/contest`
+
+#### GET `/list` - 获取比赛列表
+
+**认证**: 需要 Bearer Token
+
+**查询参数**:
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `page` | int | 页码 |
+| `size` | int | 每页数量 |
+
+**成功响应** (200):
+```json
+{
+    "code": 200,
+    "message": "success",
+    "data": {
+        "total": 2,
+        "page": 1,
+        "size": 20,
+        "list": [
+            {
+                "id": 1,
+                "title": "期中赛",
+                "type": "oi",
+                "start_at": "2026-03-01T08:00:00Z",
+                "end_at": "2026-03-01T11:00:00Z",
+                "problem_count": 5
+            }
+        ]
+    }
+}
+```
+
+#### GET `/:id` - 获取比赛详情
+
+**认证**: 需要 Bearer Token（且在比赛允许名单/分组内）
+**说明**:
+- `has_accepted` 仅统计比赛开始后（且在比赛时间范围内）的通过记录
+- `my_total` 为当前用户总分：IOI 赛制比赛进行中可见，OI 赛制需比赛结束后可见
+
+**成功响应** (200):
+```json
+{
+    "code": 200,
+    "message": "success",
+    "data": {
+        "contest": {
+            "id": 1,
+            "title": "期中赛",
+            "type": "oi",
+            "start_at": "2026-03-01T08:00:00Z",
+            "end_at": "2026-03-01T11:00:00Z",
+            "problem_ids": [1, 2, 3],
+            "allowed_users": [10, 11],
+            "allowed_groups": ["ClassA"]
+        },
+        "problems": [
+            {"id": 1, "title": "A+B", "difficulty": "easy", "has_accepted": true}
+        ],
+        "my_total": 180
+    }
+}
+```
+
+### 3.6 统计模块 `/api/v1/statistics`
+
+#### GET `/` - 获取系统统计（公开）
+
+**成功响应** (200):
+```json
+{
+    "code": 200,
+    "message": "success",
+    "data": {
+        "problems": 10,
+        "users": 30,
+        "submissions": 120
+    }
+}
+```
+
+### 3.7 管理模块 `/api/v1/admin`
+
+#### POST `/users` - 创建用户（管理员分配账号）
+
+**认证**: 需要 Bearer Token + 管理员权限
+
+**请求体**:
+```json
+{
+    "username": "string",     // 3-20 字符，必填
+    "email": "string",        // 邮箱格式，可选
+    "password": "string",     // 6-20 字符，必填
+    "student_id": "string",   // 可选
+    "role": "user",           // user 或 admin，可选
+    "group": "ClassA"         // 分组，可选
+}
+```
+
+**成功响应** (200):
+```json
+{
+    "code": 200,
+    "message": "success",
+    "data": {
+        "id": 1,
+        "username": "testuser",
+        "email": "test@example.com",
+        "student_id": "",
+        "role": "user",
+        "solved_count": 0,
+        "submit_count": 0
+    }
+}
+```
+
+#### POST `/users/batch` - 批量导入用户
+
+**认证**: 需要 Bearer Token + 管理员权限
+
+**请求体**:
+```json
+{
+    "users": [
+        {
+            "username": "student01",
+            "password": "pass123",
+            "email": "",
+            "student_id": "2025001",
+            "group": "ClassA",
+            "role": "user"
+        }
+    ]
+}
+```
+
+**成功响应** (200):
+```json
+{
+    "code": 200,
+    "message": "success",
+    "data": {
+        "total": 10,
+        "created": 8,
+        "failed": 2,
+        "errors": [
+            {"index": 3, "username": "student04", "error": "用户名已存在"}
+        ]
+    }
+}
+```
+
+#### PUT `/users/:id` - 更新用户信息
+
+**认证**: 需要 Bearer Token + 管理员权限
+
+**请求体**:
+```json
+{
+    "username": "string",     // 可选
+    "email": "string",        // 可选（可置空）
+    "student_id": "string",   // 可选（可置空）
+    "group": "ClassA",        // 可选（可置空）
+    "role": "user",           // 可选
+    "password": "string"      // 可选（重置密码）
+}
+```
+
+#### POST `/contests` - 创建比赛
+
+**认证**: 需要 Bearer Token + 管理员权限
+
+**请求体**:
+```json
+{
+    "title": "期中赛",
+    "description": "可选",
+    "type": "oi",                         // oi 或 ioi
+    "start_at": "2026-03-01T08:00:00Z",
+    "end_at": "2026-03-01T11:00:00Z",
+    "problem_ids": [1, 2, 3],
+    "allowed_users": [10, 11],
+    "allowed_groups": ["ClassA"]
+}
+```
+
+#### PUT `/contests/:id` - 更新比赛
+
+**认证**: 需要 Bearer Token + 管理员权限
+
+**请求体**: 同创建比赛
+
+#### DELETE `/contests/:id` - 删除比赛
+
+**认证**: 需要 Bearer Token + 管理员权限
+
+#### GET `/contests/:id/leaderboard` - 比赛排行榜（管理员）
+
+**认证**: 需要 Bearer Token + 管理员权限
+**说明**: OI/IOI 赛制均按每题最高分汇总
+
+**成功响应** (200):
+```json
+{
+    "code": 200,
+    "message": "success",
+    "data": {
+        "contest": {
+            "id": 1,
+            "title": "期中赛",
+            "type": "oi"
+        },
+        "problem_ids": [1, 2, 3],
+        "entries": [
+            {
+                "user_id": 10,
+                "username": "student01",
+                "group": "ClassA",
+                "total": 240,
+                "scores": [80, 80, 80]
+            }
+        ]
+    }
+}
+```
+
+#### GET `/contests/:id/export` - 导出比赛成绩（管理员）
+
+**认证**: 需要 Bearer Token + 管理员权限
+
+**响应**: `text/csv` 文件下载
 
 #### GET `/users` - 获取用户列表
 
@@ -1001,10 +1213,11 @@ type Claims struct {
 |------|------|------|
 | id | INTEGER | 主键，自增 |
 | username | VARCHAR(50) | 用户名，唯一 |
-| email | VARCHAR(100) | 邮箱，唯一 |
+| email | VARCHAR(100) | 邮箱，可选 |
 | password_hash | VARCHAR(255) | 密码哈希 |
 | student_id | VARCHAR(50) | 学号 |
 | role | VARCHAR(20) | 角色：user/admin |
+| group | VARCHAR(50) | 分组 |
 | solved_count | INTEGER | 解题数 |
 | submit_count | INTEGER | 提交数 |
 | created_at | DATETIME | 创建时间 |
@@ -1059,6 +1272,22 @@ type Claims struct {
 | compile_error | TEXT | 编译错误信息 |
 | final_message | TEXT | 最终判定说明 |
 | created_at | DATETIME | 提交时间 |
+
+#### contests 表
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | INTEGER | 主键，自增 |
+| title | VARCHAR(200) | 比赛名称 |
+| description | TEXT | 比赛描述 |
+| type | VARCHAR(10) | 赛制：oi/ioi |
+| start_at | DATETIME | 开始时间 |
+| end_at | DATETIME | 结束时间 |
+| problem_ids | TEXT | 题目 ID 列表（JSON） |
+| allowed_users | TEXT | 允许用户 ID 列表（JSON） |
+| allowed_groups | TEXT | 允许分组列表（JSON） |
+| created_by | INTEGER | 创建者 ID |
+| created_at | DATETIME | 创建时间 |
+| updated_at | DATETIME | 更新时间 |
 
 #### settings 表
 | 字段 | 类型 | 说明 |
@@ -1303,6 +1532,10 @@ ELSE IF AI 判题启用:
             final_message = "测试点通过，AI 提示: ..."
 ELSE:
     最终结果 = 传统评测结果
+
+# 评分修正（AI 未满足要求时）
+IF AI 判定未通过:
+    score = min(score, 50)
 ```
 
 ---
@@ -1318,6 +1551,8 @@ ELSE:
 | `problem.js` | 题目相关 API |
 | `submission.js` | 提交相关 API |
 | `rank.js` | 排行榜 API |
+| `contest.js` | 比赛 API |
+| `statistics.js` | 统计 API |
 | `admin.js` | 管理员 API |
 
 ### 7.2 状态管理 (`src/stores/`)
@@ -1331,7 +1566,6 @@ ELSE:
 | `isLoggedIn` | 是否已登录 |
 | `isAdmin` | 是否管理员 |
 | `login(credentials)` | 登录 |
-| `register(data)` | 注册 |
 | `fetchProfile()` | 获取个人信息 |
 | `logout()` | 退出登录 |
 
@@ -1344,11 +1578,13 @@ ELSE:
 | `/problem/:id` | ProblemDetail | 公开 |
 | `/submissions` | SubmissionList | 公开 |
 | `/submission/:id` | SubmissionDetail | 公开 |
+| `/contests` | ContestList | 需登录 |
+| `/contest/:id` | ContestDetail | 需登录 |
 | `/rank` | Rank | 公开 |
 | `/login` | Login | 公开 |
-| `/register` | Register | 公开 |
 | `/profile` | Profile | 需登录 |
 | `/admin/*` | AdminLayout | 需管理员 |
+| `/admin/contests` | ContestManage | 需管理员 |
 | `/admin/settings` | Settings | 需管理员 |
 
 ### 7.4 主要组件
@@ -1402,12 +1638,18 @@ go run ./cmd/server -config ./configs/config.yaml
 #### 手动测试 API
 
 ```bash
-# 注册
-curl -X POST http://localhost:8080/api/v1/user/register \
+# 管理员登录
+curl -X POST http://localhost:8080/api/v1/user/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"test","email":"test@test.com","password":"123456"}'
+  -d '{"username":"admin","password":"admin123"}'
 
-# 登录
+# 管理员创建用户（需要管理员 Token）
+curl -X POST http://localhost:8080/api/v1/admin/users \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <admin_token>" \
+  -d '{"username":"test","email":"test@test.com","password":"123456","student_id":"2025001"}'
+
+# 普通用户登录
 curl -X POST http://localhost:8080/api/v1/user/login \
   -H "Content-Type: application/json" \
   -d '{"username":"test","password":"123456"}'

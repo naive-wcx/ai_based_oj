@@ -6,7 +6,8 @@
 开发一个支持 AI 智能判题的在线评测系统（OJ），在传统 OJ 功能基础上，增加基于大模型的代码分析能力，能够检测用户提交的代码是否符合题目要求的算法或编程语言规范。
 
 ### 1.2 核心特性
-- **传统 OJ 功能**：用户注册登录、题目管理、代码提交、自动评测、排行榜等
+- **传统 OJ 功能**：用户登录与管理、题目管理、代码提交、自动评测、排行榜等
+- **比赛功能**：支持 OI / IOI 赛制，按题目与用户/分组配置参赛范围
 - **AI 智能判题**：调用大模型 API（如 DeepSeek）分析代码，检查是否使用指定算法/语言
 - **灵活配置**：每道题目可独立配置是否启用 AI 判题及具体要求
 - **双重结果**：同时返回测试点评测结果和 AI 分析结果
@@ -192,22 +193,13 @@ oj-system/
 
 | 方法 | 路径 | 说明 | 权限 |
 |------|------|------|------|
-| POST | `/register` | 用户注册 | 公开 |
 | POST | `/login` | 用户登录 | 公开 |
 | GET | `/profile` | 获取个人信息 | 登录 |
 | PUT | `/profile` | 更新个人信息 | 登录 |
 | POST | `/logout` | 退出登录 | 登录 |
 
-**注册请求**
-```json
-POST /api/v1/user/register
-{
-    "username": "string",      // 用户名，3-20字符
-    "email": "string",         // 邮箱
-    "password": "string",      // 密码，6-20字符
-    "student_id": "string"     // 学号（可选）
-}
-```
+**账号分配说明**
+普通用户账号由管理员在后台统一创建与分配，客户端不再提供注册入口。
 
 **登录响应**
 ```json
@@ -329,14 +321,127 @@ POST /api/v1/submission
 | GET | `/` | 获取排行榜 | 公开 |
 | GET | `/problem/:id` | 获取题目排行 | 公开 |
 
-### 5.5 管理模块 `/api/v1/admin`
+### 5.5 比赛模块 `/api/v1/contest`
+
+| 方法 | 路径 | 说明 | 权限 |
+|------|------|------|------|
+| GET | `/list` | 获取比赛列表 | 登录 |
+| GET | `/:id` | 获取比赛详情 | 登录 |
+
+**比赛详情响应结构**
+```json
+{
+    "contest": {
+        "id": 1,
+        "title": "期中赛",
+        "type": "oi",
+        "start_at": "2026-03-01T08:00:00Z",
+        "end_at": "2026-03-01T11:00:00Z",
+        "problem_ids": [1, 2, 3],
+        "allowed_users": [10, 11],
+        "allowed_groups": ["ClassA"]
+    },
+    "problems": [
+        {"id": 1, "title": "A+B", "difficulty": "easy", "has_accepted": true}
+    ],
+    "my_total": 180
+}
+```
+
+**说明**：
+- `has_accepted` 仅统计比赛开始后（且在比赛时间范围内）的通过记录
+- `my_total` 为当前用户总分：IOI 赛制比赛进行中可见，OI 赛制需比赛结束后可见
+- 排名与总分均按每题最高分汇总（IOI 赛制同样取最高分）
+
+### 5.6 统计模块 `/api/v1/statistics`
+
+| 方法 | 路径 | 说明 | 权限 |
+|------|------|------|------|
+| GET | `/` | 获取系统统计（题目/用户/提交数量） | 公开 |
+
+**统计响应**
+```json
+{
+    "problems": 10,
+    "users": 30,
+    "submissions": 120
+}
+```
+
+### 5.7 管理模块 `/api/v1/admin`
 
 | 方法 | 路径 | 说明 | 权限 |
 |------|------|------|------|
 | GET | `/users` | 用户管理列表 | 管理员 |
+| POST | `/users` | 创建用户（管理员分配账号） | 管理员 |
+| POST | `/users/batch` | 批量导入用户 | 管理员 |
+| PUT | `/users/:id` | 更新用户信息 | 管理员 |
 | PUT | `/users/:id/role` | 修改用户角色 | 管理员 |
+| POST | `/contests` | 创建比赛 | 管理员 |
+| PUT | `/contests/:id` | 更新比赛 | 管理员 |
+| DELETE | `/contests/:id` | 删除比赛 | 管理员 |
+| GET | `/contests/:id/leaderboard` | 比赛排行榜（管理员） | 管理员 |
+| GET | `/contests/:id/export` | 导出比赛成绩 | 管理员 |
 | GET | `/statistics` | 系统统计 | 管理员 |
 | POST | `/rejudge/:id` | 重新判题 | 管理员 |
+
+**创建用户请求**
+```json
+POST /api/v1/admin/users
+{
+    "username": "string",      // 用户名，3-20 字符
+    "email": "string",         // 邮箱（可选）
+    "password": "string",      // 初始密码，6-20 字符
+    "student_id": "string",    // 学号（可选）
+    "role": "user",            // user 或 admin（可选）
+    "group": "ClassA"          // 分组（可选）
+}
+```
+
+**批量导入请求**
+```json
+POST /api/v1/admin/users/batch
+{
+    "users": [
+        {
+            "username": "student01",
+            "password": "pass123",
+            "email": "",
+            "student_id": "2025001",
+            "group": "ClassA",
+            "role": "user"
+        }
+    ]
+}
+```
+
+**更新用户请求**
+```json
+PUT /api/v1/admin/users/:id
+{
+    "username": "string",      // 可选
+    "email": "string",         // 可选（可置空）
+    "student_id": "string",    // 可选（可置空）
+    "group": "ClassA",         // 可选（可置空）
+    "role": "user",            // 可选
+    "password": "string"       // 可选（重置密码）
+}
+```
+
+**创建比赛请求**
+```json
+POST /api/v1/admin/contests
+{
+    "title": "期中赛",
+    "description": "可选",
+    "type": "oi",                         // oi 或 ioi
+    "start_at": "2026-03-01T08:00:00Z",
+    "end_at": "2026-03-01T11:00:00Z",
+    "problem_ids": [1, 2, 3],
+    "allowed_users": [10, 11],
+    "allowed_groups": ["ClassA"]
+}
+```
 
 ---
 
@@ -462,6 +567,14 @@ Headers:
 | `custom_prompt` | string | 自定义判题说明 |
 | `strict_mode` | bool | 严格模式：AI 判定失败则直接 WA |
 
+### 6.5 评分修正规则
+
+当题目启用 AI 判题且 **AI 判定未满足要求** 时，最终得分会进行封顶处理：
+
+```
+score = min(score, 50)
+```
+
 ---
 
 ## 7. 数据库设计
@@ -471,10 +584,11 @@ Headers:
 CREATE TABLE users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username VARCHAR(50) UNIQUE NOT NULL,
-    email VARCHAR(100) UNIQUE NOT NULL,
+    email VARCHAR(100),
     password_hash VARCHAR(255) NOT NULL,
     student_id VARCHAR(50),
     role VARCHAR(20) DEFAULT 'user',        -- user, admin
+    `group` VARCHAR(50),
     solved_count INTEGER DEFAULT 0,
     submit_count INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -557,6 +671,24 @@ CREATE INDEX idx_submissions_problem ON submissions(problem_id);
 CREATE INDEX idx_submissions_status ON submissions(status);
 ```
 
+### 7.6 比赛表 `contests`
+```sql
+CREATE TABLE contests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title VARCHAR(200) NOT NULL,
+    description TEXT,
+    type VARCHAR(10) NOT NULL,            -- oi | ioi
+    start_at DATETIME,
+    end_at DATETIME,
+    problem_ids TEXT,                     -- JSON 列表
+    allowed_users TEXT,                   -- JSON 列表
+    allowed_groups TEXT,                  -- JSON 列表
+    created_by INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+```
+
 ### 7.5 题目统计表 `problem_statistics`
 ```sql
 CREATE TABLE problem_statistics (
@@ -579,12 +711,13 @@ CREATE TABLE problem_statistics (
 | 首页 | `/` | 系统介绍、公告 |
 | 题目列表 | `/problems` | 题目列表、筛选、搜索 |
 | 题目详情 | `/problem/:id` | 题目内容、代码提交 |
+| 比赛列表 | `/contests` | 比赛列表 |
+| 比赛详情 | `/contest/:id` | 比赛详情、题目列表 |
 | 提交列表 | `/submissions` | 所有提交记录 |
 | 提交详情 | `/submission/:id` | 提交结果、AI 分析详情 |
 | 排行榜 | `/rank` | 用户排名 |
 | 个人中心 | `/profile` | 个人信息、提交统计 |
 | 登录 | `/login` | 用户登录 |
-| 注册 | `/register` | 用户注册 |
 | 管理后台 | `/admin/*` | 题目管理、用户管理 |
 
 ### 8.2 核心组件
@@ -609,7 +742,6 @@ components/
 │   └── AIJudgeResult.vue    # AI 判题结果展示
 ├── user/
 │   ├── LoginForm.vue        # 登录表单
-│   ├── RegisterForm.vue     # 注册表单
 │   └── UserProfile.vue      # 用户资料
 └── admin/
     ├── ProblemForm.vue      # 题目编辑表单
@@ -627,7 +759,7 @@ components/
 - [ ] 数据库连接与 ORM 配置（GORM + SQLite）
 - [ ] 用户认证模块（JWT）
 - [ ] 基础中间件（日志、错误处理、CORS、认证）
-- [ ] 用户模块 API（注册、登录、个人信息）
+- [ ] 用户模块 API（登录、个人信息、管理员创建用户）
 
 ### 阶段二：核心业务开发
 - [ ] 题目模块 API（CRUD、测试数据上传）
@@ -646,7 +778,7 @@ components/
 ### 阶段四：前端开发
 - [ ] 初始化 Vue 3 项目
 - [ ] 路由配置与布局
-- [ ] 用户认证页面（登录/注册）
+- [ ] 用户认证页面（登录）
 - [ ] 题目列表与详情页
 - [ ] 代码编辑器集成（Monaco Editor）
 - [ ] 提交与结果展示

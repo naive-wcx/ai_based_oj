@@ -8,22 +8,40 @@ import (
 type User struct {
 	ID           uint      `json:"id" gorm:"primaryKey"`
 	Username     string    `json:"username" gorm:"uniqueIndex;size:50;not null"`
-	Email        string    `json:"email" gorm:"uniqueIndex;size:100;not null"`
+	Email        string    `json:"email" gorm:"size:100"`
 	PasswordHash string    `json:"-" gorm:"size:255;not null"`
 	StudentID    string    `json:"student_id" gorm:"size:50"`
 	Role         string    `json:"role" gorm:"size:20;default:user"` // user, admin
+	Group        string    `json:"group" gorm:"size:50"`
 	SolvedCount  int       `json:"solved_count" gorm:"default:0"`
 	SubmitCount  int       `json:"submit_count" gorm:"default:0"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
-// UserRegisterRequest 用户注册请求
-type UserRegisterRequest struct {
+// AdminCreateUserRequest 管理员创建用户请求
+type AdminCreateUserRequest struct {
 	Username  string `json:"username" binding:"required,min=3,max=20"`
-	Email     string `json:"email" binding:"required,email"`
+	Email     string `json:"email"`
 	Password  string `json:"password" binding:"required,min=6,max=20"`
 	StudentID string `json:"student_id"`
+	Role      string `json:"role"`
+	Group     string `json:"group"`
+}
+
+// AdminCreateUsersRequest 批量创建用户请求
+type AdminCreateUsersRequest struct {
+	Users []AdminCreateUserRequest `json:"users" binding:"required"`
+}
+
+// AdminUpdateUserRequest 管理员更新用户请求
+type AdminUpdateUserRequest struct {
+	Username  *string `json:"username"`
+	Email     *string `json:"email"`
+	StudentID *string `json:"student_id"`
+	Role      *string `json:"role"`
+	Group     *string `json:"group"`
+	Password  *string `json:"password"`
 }
 
 // UserLoginRequest 用户登录请求
@@ -45,6 +63,7 @@ type UserInfo struct {
 	Email       string `json:"email"`
 	StudentID   string `json:"student_id"`
 	Role        string `json:"role"`
+	Group       string `json:"group"`
 	SolvedCount int    `json:"solved_count"`
 	SubmitCount int    `json:"submit_count"`
 }
@@ -57,6 +76,7 @@ func (u *User) ToUserInfo() *UserInfo {
 		Email:       u.Email,
 		StudentID:   u.StudentID,
 		Role:        u.Role,
+		Group:       u.Group,
 		SolvedCount: u.SolvedCount,
 		SubmitCount: u.SubmitCount,
 	}

@@ -26,7 +26,7 @@
       </el-form>
       
       <div class="auth-footer">
-        还没有账号？<router-link to="/register">立即注册</router-link>
+        还没有账号？请联系管理员分配
       </div>
     </div>
   </div>

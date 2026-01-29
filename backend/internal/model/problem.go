@@ -25,6 +25,7 @@ type Problem struct {
 	AcceptedCount int           `json:"accepted_count" gorm:"default:0"`
 	CreatedAt     time.Time     `json:"created_at"`
 	UpdatedAt     time.Time     `json:"updated_at"`
+	HasAccepted   bool          `json:"has_accepted" gorm:"-"`
 }
 
 // Sample 样例
@@ -148,4 +149,5 @@ type ProblemListItem struct {
 	SubmitCount   int      `json:"submit_count"`
 	AcceptedCount int      `json:"accepted_count"`
 	HasAIJudge    bool     `json:"has_ai_judge"`
+	HasAccepted   bool     `json:"has_accepted"`
 }

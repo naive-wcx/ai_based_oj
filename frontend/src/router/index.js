@@ -23,6 +23,18 @@ const routes = [
     component: () => import('@/views/submission/SubmissionList.vue'),
   },
   {
+    path: '/contests',
+    name: 'Contests',
+    component: () => import('@/views/contest/ContestList.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/contest/:id',
+    name: 'ContestDetail',
+    component: () => import('@/views/contest/ContestDetail.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/submission/:id',
     name: 'SubmissionDetail',
     component: () => import('@/views/submission/SubmissionDetail.vue'),
@@ -36,11 +48,6 @@ const routes = [
     path: '/login',
     name: 'Login',
     component: () => import('@/views/auth/Login.vue'),
-  },
-  {
-    path: '/register',
-    name: 'Register',
-    component: () => import('@/views/auth/Register.vue'),
   },
   {
     path: '/profile',
@@ -62,6 +69,21 @@ const routes = [
         path: 'problems',
         name: 'AdminProblems',
         component: () => import('@/views/admin/ProblemManage.vue'),
+      },
+      {
+        path: 'contests',
+        name: 'AdminContests',
+        component: () => import('@/views/admin/ContestManage.vue'),
+      },
+      {
+        path: 'contest/create',
+        name: 'AdminContestCreate',
+        component: () => import('@/views/admin/ContestEdit.vue'),
+      },
+      {
+        path: 'contest/:id/edit',
+        name: 'AdminContestEdit',
+        component: () => import('@/views/admin/ContestEdit.vue'),
       },
       {
         path: 'problem/create',

@@ -14,11 +14,13 @@ import (
 
 type ProblemService struct {
 	repo *repository.ProblemRepository
+	submissionRepo *repository.SubmissionRepository
 }
 
 func NewProblemService() *ProblemService {
 	return &ProblemService{
 		repo: repository.NewProblemRepository(),
+		submissionRepo: repository.NewSubmissionRepository(),
 	}
 }
 
@@ -63,6 +65,19 @@ func (s *ProblemService) GetByID(id uint) (*model.Problem, error) {
 	problem, err := s.repo.GetByID(id)
 	if err != nil {
 		return nil, errors.New("题目不存在")
+	}
+	return problem, nil
+}
+
+// GetByIDWithUser 获取题目详情（含通过标识）
+func (s *ProblemService) GetByIDWithUser(id uint, userID uint) (*model.Problem, error) {
+	problem, err := s.repo.GetByID(id)
+	if err != nil {
+		return nil, errors.New("题目不存在")
+	}
+	if userID > 0 {
+		hasAccepted := s.submissionRepo.HasAccepted(userID, id)
+		problem.HasAccepted = hasAccepted
 	}
 	return problem, nil
 }
@@ -125,6 +140,47 @@ func (s *ProblemService) List(page, size int, difficulty, tag, keyword string) (
 			SubmitCount:   p.SubmitCount,
 			AcceptedCount: p.AcceptedCount,
 			HasAIJudge:    hasAI,
+		})
+	}
+
+	return items, total, nil
+}
+
+// ListWithUser 获取题目列表（含通过标识）
+func (s *ProblemService) ListWithUser(page, size int, difficulty, tag, keyword string, userID uint) ([]model.ProblemListItem, int64, error) {
+	problems, total, err := s.repo.List(page, size, difficulty, tag, keyword)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	problemIDs := make([]uint, 0, len(problems))
+	for _, p := range problems {
+		problemIDs = append(problemIDs, p.ID)
+	}
+
+	acceptedSet := map[uint]struct{}{}
+	if userID > 0 {
+		acceptedIDs, err := s.submissionRepo.GetAcceptedProblemIDs(userID, problemIDs)
+		if err == nil {
+			for _, id := range acceptedIDs {
+				acceptedSet[id] = struct{}{}
+			}
+		}
+	}
+
+	var items []model.ProblemListItem
+	for _, p := range problems {
+		hasAI := p.AIJudgeConfig != nil && p.AIJudgeConfig.Enabled
+		_, hasAccepted := acceptedSet[p.ID]
+		items = append(items, model.ProblemListItem{
+			ID:            p.ID,
+			Title:         p.Title,
+			Difficulty:    p.Difficulty,
+			Tags:          p.Tags,
+			SubmitCount:   p.SubmitCount,
+			AcceptedCount: p.AcceptedCount,
+			HasAIJudge:    hasAI,
+			HasAccepted:   hasAccepted,
 		})
 	}
 

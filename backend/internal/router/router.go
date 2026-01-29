@@ -30,6 +30,8 @@ func SetupRouter(mode string) *gin.Engine {
 	problemHandler := handler.NewProblemHandler()
 	submissionHandler := handler.NewSubmissionHandler()
 	settingHandler := handler.NewSettingHandler()
+	contestHandler := handler.NewContestHandler()
+	statsHandler := handler.NewStatisticsHandler()
 
 	// API v1
 	v1 := r.Group("/api/v1")
@@ -37,7 +39,6 @@ func SetupRouter(mode string) *gin.Engine {
 		// 用户模块
 		user := v1.Group("/user")
 		{
-			user.POST("/register", userHandler.Register)
 			user.POST("/login", userHandler.Login)
 			user.GET("/profile", middleware.AuthMiddleware(), userHandler.GetProfile)
 			user.PUT("/profile", middleware.AuthMiddleware(), userHandler.UpdateProfile)
@@ -46,8 +47,8 @@ func SetupRouter(mode string) *gin.Engine {
 		// 题目模块
 		problem := v1.Group("/problem")
 		{
-			problem.GET("/list", problemHandler.List)
-			problem.GET("/:id", problemHandler.GetByID)
+			problem.GET("/list", middleware.OptionalAuthMiddleware(), problemHandler.List)
+			problem.GET("/:id", middleware.OptionalAuthMiddleware(), problemHandler.GetByID)
 			
 			// 管理员操作
 			problem.POST("", middleware.AuthMiddleware(), middleware.AdminMiddleware(), problemHandler.Create)
@@ -69,13 +70,31 @@ func SetupRouter(mode string) *gin.Engine {
 
 		// 排行榜
 		v1.GET("/rank", userHandler.GetRankList)
+		// 统计
+		v1.GET("/statistics", statsHandler.GetPublic)
+
+		// 比赛模块
+		contest := v1.Group("/contest")
+		contest.Use(middleware.AuthMiddleware())
+		{
+			contest.GET("/list", contestHandler.List)
+			contest.GET("/:id", contestHandler.GetByID)
+		}
 
 		// 管理员模块
 		admin := v1.Group("/admin")
 		admin.Use(middleware.AuthMiddleware(), middleware.AdminMiddleware())
 		{
 			admin.GET("/users", userHandler.GetUserList)
+			admin.POST("/users", userHandler.CreateUser)
+			admin.POST("/users/batch", userHandler.CreateUsersBatch)
+			admin.PUT("/users/:id", userHandler.UpdateUser)
 			admin.PUT("/users/:id/role", userHandler.SetUserRole)
+			admin.POST("/contests", contestHandler.Create)
+			admin.PUT("/contests/:id", contestHandler.Update)
+			admin.DELETE("/contests/:id", contestHandler.Delete)
+			admin.GET("/contests/:id/leaderboard", contestHandler.GetLeaderboard)
+			admin.GET("/contests/:id/export", contestHandler.ExportLeaderboard)
 			
 			// 系统设置
 			admin.GET("/settings/ai", settingHandler.GetAISettings)

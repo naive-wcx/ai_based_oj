@@ -19,24 +19,6 @@ func NewUserHandler() *UserHandler {
 	}
 }
 
-// Register 用户注册
-// POST /api/v1/user/register
-func (h *UserHandler) Register(c *gin.Context) {
-	var req model.UserRegisterRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, model.BadRequest("参数错误: "+err.Error()))
-		return
-	}
-
-	user, err := h.service.Register(&req)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, model.BadRequest(err.Error()))
-		return
-	}
-
-	c.JSON(http.StatusOK, model.Success(user.ToUserInfo()))
-}
-
 // Login 用户登录
 // POST /api/v1/user/login
 func (h *UserHandler) Login(c *gin.Context) {
@@ -154,4 +136,64 @@ func (h *UserHandler) SetUserRole(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, model.SuccessMessage("设置成功", nil))
+}
+
+// CreateUser 管理员创建用户
+// POST /api/v1/admin/users
+func (h *UserHandler) CreateUser(c *gin.Context) {
+	var req model.AdminCreateUserRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, model.BadRequest("参数错误: "+err.Error()))
+		return
+	}
+
+	user, err := h.service.CreateUserByAdmin(&req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, model.BadRequest(err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, model.Success(user.ToUserInfo()))
+}
+
+// CreateUsersBatch 管理员批量创建用户
+// POST /api/v1/admin/users/batch
+func (h *UserHandler) CreateUsersBatch(c *gin.Context) {
+	var req model.AdminCreateUsersRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, model.BadRequest("参数错误: "+err.Error()))
+		return
+	}
+
+	created, errorsList := h.service.CreateUsersBatch(&req)
+	c.JSON(http.StatusOK, model.Success(gin.H{
+		"total":   len(req.Users),
+		"created": created,
+		"failed":  len(errorsList),
+		"errors":  errorsList,
+	}))
+}
+
+// UpdateUser 管理员更新用户信息
+// PUT /api/v1/admin/users/:id
+func (h *UserHandler) UpdateUser(c *gin.Context) {
+	userID := getUintParam(c, "id")
+	if userID == 0 {
+		c.JSON(http.StatusBadRequest, model.BadRequest("用户 ID 无效"))
+		return
+	}
+
+	var req model.AdminUpdateUserRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, model.BadRequest("参数错误: "+err.Error()))
+		return
+	}
+
+	user, err := h.service.UpdateUserByAdmin(userID, &req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, model.BadRequest(err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, model.Success(user.ToUserInfo()))
 }

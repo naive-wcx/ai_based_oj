@@ -27,11 +27,6 @@ export const useUserStore = defineStore('user', () => {
     return res
   }
 
-  async function register(data) {
-    const res = await userApi.register(data)
-    return res
-  }
-
   async function fetchProfile() {
     if (!token.value) return
     try {
@@ -56,7 +51,6 @@ export const useUserStore = defineStore('user', () => {
     isAdmin,
     username,
     login,
-    register,
     fetchProfile,
     logout,
   }

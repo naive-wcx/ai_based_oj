@@ -3,14 +3,15 @@
     <div class="navbar-container">
       <div class="navbar-brand">
         <router-link to="/" class="logo">
-          <span class="logo-icon">⚡</span>
-          <span class="logo-text">OJ</span>
+          <img class="logo-image" :src="logoUrl" alt="USTC OJ" />
+          <span class="logo-text">USTC OJ</span>
         </router-link>
       </div>
 
       <nav class="navbar-menu">
         <router-link to="/problems" class="nav-link">题目</router-link>
         <router-link to="/submissions" class="nav-link">提交</router-link>
+        <router-link to="/contests" class="nav-link">比赛</router-link>
         <router-link to="/rank" class="nav-link">排行榜</router-link>
       </nav>
 
@@ -39,7 +40,6 @@
         </template>
         <template v-else>
           <el-button type="primary" plain @click="$router.push('/login')">登录</el-button>
-          <el-button type="primary" @click="$router.push('/register')">注册</el-button>
         </template>
       </div>
     </div>
@@ -51,6 +51,7 @@ import { useUserStore } from '@/stores/user'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowDown, User, Setting, SwitchButton } from '@element-plus/icons-vue'
+import logoUrl from '@/assets/logo.png'
 
 const userStore = useUserStore()
 const router = useRouter()
@@ -86,13 +87,20 @@ function handleLogout() {
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 24px;
-    font-weight: 700;
-    color: #409eff;
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    color: #1f2d3d;
     text-decoration: none;
     
-    .logo-icon {
-      font-size: 28px;
+    .logo-image {
+      width: 30px;
+      height: 30px;
+      object-fit: contain;
+    }
+
+    .logo-text {
+      font-family: "Trebuchet MS", "Segoe UI", Arial, sans-serif;
     }
   }
 }
