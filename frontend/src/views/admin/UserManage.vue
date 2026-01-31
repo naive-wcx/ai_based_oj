@@ -162,7 +162,8 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
+import { message } from '@/utils/message'
 import { adminApi } from '@/api/admin'
 
 const loading = ref(false)
@@ -294,7 +295,7 @@ async function setRole(row, role) {
     })
     
     await adminApi.setUserRole(row.id, role)
-    ElMessage.success('设置成功')
+    message.success('设置成功')
     fetchUsers()
   } catch (e) {
     if (e !== 'cancel') {
@@ -332,7 +333,7 @@ async function handleCreate() {
       role: createForm.role,
       password: createForm.password,
     })
-    ElMessage.success('创建成功')
+    message.success('创建成功')
     createDialogVisible.value = false
     fetchUsers()
   } catch (e) {
@@ -386,14 +387,14 @@ async function handleUpdate() {
   if (editForm.password) payload.password = editForm.password
 
   if (Object.keys(payload).length === 0) {
-    ElMessage.info('没有需要更新的内容')
+    message.info('没有需要更新的内容')
     return
   }
 
   updating.value = true
   try {
     await adminApi.updateUser(editForm.id, payload)
-    ElMessage.success('更新成功')
+    message.success('更新成功')
     editDialogVisible.value = false
     fetchUsers()
   } catch (e) {
@@ -472,11 +473,11 @@ function parseBatchInput(text) {
 async function handleBatchImport() {
   const { users: parsedUsers, errors } = parseBatchInput(batchForm.text)
   if (errors.length) {
-    ElMessage.error(errors[0])
+    message.error(errors[0])
     return
   }
   if (!parsedUsers.length) {
-    ElMessage.warning('没有可导入的用户')
+    message.warning('没有可导入的用户')
     return
   }
 
@@ -485,10 +486,10 @@ async function handleBatchImport() {
     const res = await adminApi.createUsersBatch({ users: parsedUsers })
     const { created, failed } = res.data
     if (failed > 0) {
-      ElMessage.warning(`导入完成：成功 ${created}，失败 ${failed}`)
+      message.warning(`导入完成：成功 ${created}，失败 ${failed}`)
       console.warn(res.data.errors)
     } else {
-      ElMessage.success(`导入成功：共 ${created} 个用户`)
+      message.success(`导入成功：共 ${created} 个用户`)
     }
     batchDialogVisible.value = false
     fetchUsers()

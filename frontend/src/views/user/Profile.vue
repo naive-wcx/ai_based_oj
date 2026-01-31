@@ -21,21 +21,43 @@
         </el-descriptions>
       </div>
       
-      <div class="card">
-        <h3>修改资料</h3>
-        <el-form ref="formRef" :model="form" label-width="80px" style="max-width: 400px">
-          <el-form-item label="邮箱">
-            <el-input v-model="form.email" />
-          </el-form-item>
-          <el-form-item label="学号">
-            <el-input v-model="form.student_id" />
-          </el-form-item>
-          <el-form-item>
-            <el-button type="primary" :loading="loading" @click="handleUpdate">
-              保存修改
-            </el-button>
-          </el-form-item>
-        </el-form>
+      <div class="right-column">
+        <div class="card">
+          <h3>修改资料</h3>
+          <el-form ref="formRef" :model="form" label-width="80px" style="max-width: 400px">
+            <el-form-item label="邮箱">
+              <el-input v-model="form.email" />
+            </el-form-item>
+            <el-form-item label="学号">
+              <el-input v-model="form.student_id" />
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" :loading="loading" @click="handleUpdate">
+                保存修改
+              </el-button>
+            </el-form-item>
+          </el-form>
+        </div>
+
+        <div class="card">
+          <h3>修改密码</h3>
+          <el-form :model="passwordForm" label-width="100px" style="max-width: 400px">
+            <el-form-item label="当前密码">
+              <el-input v-model="passwordForm.old_password" type="password" show-password autocomplete="current-password" />
+            </el-form-item>
+            <el-form-item label="新密码">
+              <el-input v-model="passwordForm.new_password" type="password" show-password autocomplete="new-password" />
+            </el-form-item>
+            <el-form-item label="确认新密码">
+              <el-input v-model="passwordForm.confirm_password" type="password" show-password autocomplete="new-password" />
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" :loading="passwordLoading" @click="handleChangePassword">
+                修改密码
+              </el-button>
+            </el-form-item>
+          </el-form>
+        </div>
       </div>
     </div>
   </div>
@@ -43,7 +65,7 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { message } from '@/utils/message'
 import { useUserStore } from '@/stores/user'
 import { userApi } from '@/api/user'
 
@@ -54,17 +76,58 @@ const form = reactive({
   email: '',
   student_id: '',
 })
+const passwordLoading = ref(false)
+const passwordForm = reactive({
+  old_password: '',
+  new_password: '',
+  confirm_password: '',
+})
 
 async function handleUpdate() {
   loading.value = true
   try {
     await userApi.updateProfile(form)
-    ElMessage.success('更新成功')
+    message.success('更新成功')
     await userStore.fetchProfile()
   } catch (e) {
     console.error(e)
   } finally {
     loading.value = false
+  }
+}
+
+async function handleChangePassword() {
+  if (!passwordForm.old_password || !passwordForm.new_password) {
+    message.error('请输入完整的密码信息')
+    return
+  }
+  if (passwordForm.new_password.length < 6 || passwordForm.new_password.length > 20) {
+    message.error('新密码长度应为 6-20')
+    return
+  }
+  if (passwordForm.new_password !== passwordForm.confirm_password) {
+    message.error('两次输入的新密码不一致')
+    return
+  }
+  if (passwordForm.old_password === passwordForm.new_password) {
+    message.error('新密码不能与原密码相同')
+    return
+  }
+
+  passwordLoading.value = true
+  try {
+    await userApi.changePassword({
+      old_password: passwordForm.old_password,
+      new_password: passwordForm.new_password,
+    })
+    message.success('密码修改成功')
+    passwordForm.old_password = ''
+    passwordForm.new_password = ''
+    passwordForm.confirm_password = ''
+  } catch (e) {
+    console.error(e)
+  } finally {
+    passwordLoading.value = false
   }
 }
 
@@ -86,6 +149,11 @@ onMounted(async () => {
   @media (max-width: 768px) {
     grid-template-columns: 1fr;
   }
+}
+
+.right-column {
+  display: grid;
+  gap: 20px;
 }
 
 .profile-card {

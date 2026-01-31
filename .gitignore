@@ -37,3 +37,4 @@ Thumbs.db
 
 # 部署包
 deploy/package/
+upload.sh

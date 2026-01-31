@@ -12,6 +12,7 @@
             @keyup.enter="handleSearch"
           />
           <el-input
+            v-if="userStore.isAdmin"
             v-model="filters.username"
             placeholder="用户名"
             clearable
@@ -80,7 +81,7 @@
            <span v-else>-</span>
         </template>
       </el-table-column>
-      <el-table-column prop="username" label="用户" width="150" />
+      <el-table-column v-if="userStore.isAdmin" prop="username" label="用户" width="150" />
       <el-table-column label="提交时间" width="180" align="center">
         <template #default="{ row }">
           {{ formatTime(row.created_at) }}
@@ -107,12 +108,14 @@
 import { ref, reactive, onMounted } from 'vue'
 import { submissionApi } from '@/api/submission'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { message } from '@/utils/message'
+import { useUserStore } from '@/stores/user'
 
 const loading = ref(true)
 const submissions = ref([])
 const route = useRoute()
 const router = useRouter()
+const userStore = useUserStore()
 
 const filters = reactive({
   problem_id: route.query.problem_id || '',
@@ -182,7 +185,7 @@ async function fetchSubmissions() {
     pagination.total = res.data.total
     updateUrl()
   } catch (e) {
-    ElMessage.error('提交记录加载失败')
+    message.error('提交记录加载失败')
     console.error(e)
   } finally {
     loading.value = false

@@ -42,6 +42,7 @@ func SetupRouter(mode string) *gin.Engine {
 			user.POST("/login", userHandler.Login)
 			user.GET("/profile", middleware.AuthMiddleware(), userHandler.GetProfile)
 			user.PUT("/profile", middleware.AuthMiddleware(), userHandler.UpdateProfile)
+			user.PUT("/password", middleware.AuthMiddleware(), userHandler.ChangePassword)
 		}
 
 		// 题目模块
@@ -61,10 +62,11 @@ func SetupRouter(mode string) *gin.Engine {
 
 		// 提交模块
 		submission := v1.Group("/submission")
+		submission.Use(middleware.AuthMiddleware())
 		{
 			submission.GET("/list", submissionHandler.List)
-			submission.GET("/:id", middleware.OptionalAuthMiddleware(), submissionHandler.GetByID)
-			submission.POST("", middleware.AuthMiddleware(), middleware.SubmitRateLimitMiddleware(), submissionHandler.Submit)
+			submission.GET("/:id", submissionHandler.GetByID)
+			submission.POST("", middleware.SubmitRateLimitMiddleware(), submissionHandler.Submit)
 			submission.GET("/my", middleware.AuthMiddleware(), submissionHandler.GetMySubmissions)
 		}
 

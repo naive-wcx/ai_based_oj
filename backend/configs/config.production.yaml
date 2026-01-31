@@ -14,6 +14,7 @@ judge:
   workers: 1       # 2核服务器建议设置为 1
   timeout: 30
 
+# AI 设置仅通过管理后台写入数据库读取，当前代码不会从 config.yaml 读取此段
 ai:
   enabled: true
   provider: deepseek

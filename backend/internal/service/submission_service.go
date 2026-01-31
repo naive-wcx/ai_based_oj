@@ -11,6 +11,8 @@ import (
 	"oj-system/internal/repository"
 )
 
+var ErrSubmissionForbidden = errors.New("无权限")
+
 type SubmissionService struct {
 	repo        *repository.SubmissionRepository
 	problemRepo *repository.ProblemRepository
@@ -86,9 +88,9 @@ func (s *SubmissionService) GetByID(id uint, userID uint, isAdmin bool) (*model.
 		return nil, errors.New("提交不存在")
 	}
 
-	// 非管理员只能查看自己的代码
+	// 非管理员只能查看自己的提交
 	if !isAdmin && submission.UserID != userID {
-		submission.Code = "" // 隐藏代码
+		return nil, ErrSubmissionForbidden
 	}
 
 	return submission, nil

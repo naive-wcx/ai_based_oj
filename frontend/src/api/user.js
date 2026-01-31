@@ -15,4 +15,9 @@ export const userApi = {
   updateProfile(data) {
     return request.put('/user/profile', data)
   },
+
+  // 修改密码
+  changePassword(data) {
+    return request.put('/user/password', data)
+  },
 }

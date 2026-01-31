@@ -8,6 +8,8 @@
 
 - **传统 OJ 功能**：用户管理、题目管理、代码提交、自动评测、排行榜
 - **账号统一分配**：普通用户账号由管理员在后台创建与分配
+- **自助修改密码**：用户可在个人中心修改密码
+- **文件操作题目**：可要求从指定文件读入并输出到指定文件
 - **AI 智能判题**：调用 DeepSeek API 分析代码，检测是否使用指定算法/语言（不满足要求时分数封顶 50）
 - **灵活配置**：每道题目可独立配置 AI 判题要求
 - **现代化 UI**：Vue 3 + Element Plus 构建的美观界面
@@ -69,6 +71,7 @@ npm run dev
 - 管理员：`admin` / `admin123`
 
 普通用户账号请由管理员在 **管理后台 → 用户管理** 中创建后分配给学生。
+建议管理员和用户首次登录后在 **个人中心** 修改密码。
 
 ## 配置说明
 
@@ -96,6 +99,10 @@ judge:
 ```env
 JWT_SECRET=your_jwt_secret_here
 ```
+
+说明：
+- `.env` 目前只用于 `JWT_SECRET`。
+- **AI 判题配置不从 `.env` 或 `config.yaml` 读取**，只通过管理后台写入数据库设置。
 
 ### AI 判题配置
 
@@ -173,15 +180,22 @@ bash start-frontend.sh
 
 ### 服务器
 
-```
+```bash
 cd backend && CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o oj-server ./cmd/server
 
-cd frontend && npm run build
+cd frontend && npm ci && npm run build
 
-scp ./backend/oj-server <user@server>:/opt/oj/
+ssh <user@server> "sudo systemctl stop oj"
+scp ./backend/oj-server <user@server>:/opt/oj/oj-server.new
+ssh <user@server> "mv /opt/oj/oj-server.new /opt/oj/oj-server && chown www-data:www-data /opt/oj/oj-server"
 ssh <user@server> "rm -rf /opt/oj/static/*"
 scp -r ./frontend/dist/* <user@server>:/opt/oj/static/
+ssh <user@server> "sudo systemctl restart oj"
 ```
+
+注意：
+- **不要**覆盖 `/opt/oj/configs/config.yaml` 和 `/opt/oj/.env`，避免数据路径或 JWT 密钥变化。
+- `deploy/scripts/deploy_fresh_local.sh` 会执行 `--wipe`，仅适用于全新部署，不用于更新。
 
 ## AI 判题功能
 

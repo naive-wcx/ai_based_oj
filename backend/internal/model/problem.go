@@ -19,6 +19,9 @@ type Problem struct {
 	Difficulty    string        `json:"difficulty" gorm:"size:20"`       // easy, medium, hard
 	Tags          StringList    `json:"tags" gorm:"type:text"`
 	AIJudgeConfig *AIJudgeConfig `json:"ai_judge_config" gorm:"type:text"`
+	FileIOEnabled bool          `json:"file_io_enabled" gorm:"default:false"`
+	FileInputName string        `json:"file_input_name" gorm:"size:100"`
+	FileOutputName string       `json:"file_output_name" gorm:"size:100"`
 	IsPublic      bool          `json:"is_public" gorm:"default:true"`
 	CreatedBy     uint          `json:"created_by"`
 	SubmitCount   int           `json:"submit_count" gorm:"default:0"`
@@ -137,6 +140,9 @@ type ProblemCreateRequest struct {
 	Difficulty    string         `json:"difficulty"`
 	Tags          []string       `json:"tags"`
 	AIJudgeConfig *AIJudgeConfig `json:"ai_judge_config"`
+	FileIOEnabled bool           `json:"file_io_enabled"`
+	FileInputName string         `json:"file_input_name"`
+	FileOutputName string        `json:"file_output_name"`
 	IsPublic      bool           `json:"is_public"`
 }
 
@@ -149,5 +155,6 @@ type ProblemListItem struct {
 	SubmitCount   int      `json:"submit_count"`
 	AcceptedCount int      `json:"accepted_count"`
 	HasAIJudge    bool     `json:"has_ai_judge"`
+	HasFileIO     bool     `json:"has_file_io"`
 	HasAccepted   bool     `json:"has_accepted"`
 }

@@ -109,6 +109,10 @@ type Config struct {
 
 **全局变量**: `GlobalConfig *Config` - 加载后可全局访问
 
+**注意**：
+- 当前代码不会从 `config.yaml` 的 `ai` 段读取 AI 配置。
+- AI 判题设置仅通过管理后台写入数据库 `settings` 表读取。
+
 ---
 
 ### 2.2 数据模型 (`internal/model`)
@@ -136,6 +140,7 @@ type User struct {
 - `AdminCreateUsersRequest` - 管理员批量创建用户请求
 - `AdminUpdateUserRequest` - 管理员更新用户请求
 - `UserLoginRequest` - 登录请求
+- `ChangePasswordRequest` - 修改密码请求
 - `UserLoginResponse` - 登录响应（含 token）
 - `UserInfo` - 用户信息（不含密码）
 
@@ -154,6 +159,9 @@ type Problem struct {
     Difficulty    string         `json:"difficulty"`    // easy|medium|hard
     Tags          StringList     `json:"tags"`          // JSON 序列化
     AIJudgeConfig *AIJudgeConfig `json:"ai_judge_config"`
+    FileIOEnabled bool           `json:"file_io_enabled"`
+    FileInputName string         `json:"file_input_name"`
+    FileOutputName string        `json:"file_output_name"`
     IsPublic      bool           `json:"is_public"`
     CreatedBy     uint           `json:"created_by"`
     SubmitCount   int            `json:"submit_count"`
@@ -369,6 +377,7 @@ func NewUserService() *UserService
 | `Login(req *UserLoginRequest) (*UserLoginResponse, error)` | 登录（验证密码、生成 Token） |
 | `GetProfile(userID uint) (*UserInfo, error)` | 获取个人信息 |
 | `UpdateProfile(userID uint, email, studentID string) error` | 更新个人信息 |
+| `ChangePassword(userID uint, oldPassword, newPassword string) error` | 修改个人密码 |
 | `GetRankList(page, size int) ([]UserInfo, int64, error)` | 获取排行榜 |
 | `GetUserList(page, size int) ([]User, int64, error)` | 获取用户列表（管理员） |
 | `SetUserRole(userID uint, role string) error` | 设置用户角色（管理员） |
@@ -428,7 +437,7 @@ func NewSubmissionService() *SubmissionService
 | 方法 | 说明 |
 |------|------|
 | `Submit(req *SubmissionCreateRequest, userID uint) (*Submission, error)` | 提交代码 |
-| `GetByID(id uint, userID uint, isAdmin bool) (*Submission, error)` | 获取提交详情（非管理员隐藏他人代码） |
+| `GetByID(id uint, userID uint, isAdmin bool) (*Submission, error)` | 获取提交详情（非管理员仅能查看本人） |
 | `List(page, size int, problemID, userID uint, status string) (*PageData, error)` | 获取提交列表 |
 | `UpdateResult(submission *Submission) error` | 更新判题结果 |
 | `GetPendingSubmissions(limit int) ([]Submission, error)` | 获取待判题提交 |
@@ -592,6 +601,31 @@ type Claims struct {
 
 ---
 
+#### PUT `/password` - 修改密码
+
+**认证**: 需要 Bearer Token
+
+**请求体**:
+```json
+{
+    "old_password": "old_pass",
+    "new_password": "new_pass_123"
+}
+```
+
+**成功响应** (200):
+```json
+{
+    "code": 200,
+    "message": "修改成功"
+}
+```
+
+**错误响应**:
+- 400: 原密码错误 / 新密码不合法
+
+---
+
 ### 3.2 题目模块 `/api/v1/problem`
 
 #### GET `/list` - 获取题目列表
@@ -624,6 +658,7 @@ type Claims struct {
                 "submit_count": 1000,
                 "accepted_count": 500,
                 "has_ai_judge": true,
+                "has_file_io": true,
                 "has_accepted": true
             }
         ]
@@ -690,6 +725,9 @@ type Claims struct {
     "difficulty": "easy",
     "tags": ["数组"],
     "is_public": true,
+    "file_io_enabled": true,
+    "file_input_name": "data.in",
+    "file_output_name": "data.out",
     "ai_judge_config": {
         "enabled": true,
         "required_algorithm": "动态规划",
@@ -795,7 +833,7 @@ type Claims struct {
 
 #### GET `/:id` - 获取提交详情
 
-**认证**: 可选（非本人提交隐藏代码）
+**认证**: 需要 Bearer Token（管理员可查看所有，普通用户仅能查看本人）
 
 **成功响应** (200):
 ```json
@@ -807,7 +845,7 @@ type Claims struct {
         "problem_id": 1,
         "user_id": 1,
         "language": "cpp",
-        "code": "...",                    // 非本人时为空
+        "code": "...",
         "status": "Wrong Answer",
         "time_used": 15,
         "memory_used": 1024,
@@ -840,13 +878,15 @@ type Claims struct {
 
 #### GET `/list` - 获取提交列表
 
+**认证**: 需要 Bearer Token（管理员可查看所有，普通用户仅能查看本人）
+
 **查询参数**:
 | 参数 | 类型 | 说明 |
 |------|------|------|
 | `page` | int | 页码 |
 | `size` | int | 每页数量 |
 | `problem_id` | uint | 题目 ID 筛选 |
-| `user_id` | uint | 用户 ID 筛选 |
+| `user_id` | uint | 用户 ID 筛选（仅管理员生效） |
 | `status` | string | 状态筛选 |
 
 ---
@@ -1338,6 +1378,9 @@ type Claims struct {
    - 综合结果，更新 Submission
    - 清理临时文件
 ```
+
+**文件操作题目说明**：
+当题目启用 `file_io_enabled` 时，评测会将测试输入写入指定输入文件，并从指定输出文件读取结果进行对比。
 
 ### 5.2 判题队列 (`judge/queue/queue.go`)
 

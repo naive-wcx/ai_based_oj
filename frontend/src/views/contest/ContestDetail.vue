@@ -67,7 +67,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { message } from '@/utils/message'
 import { contestApi } from '@/api/contest'
 import { adminApi } from '@/api/admin'
 import DifficultyBadge from '@/components/problem/DifficultyBadge.vue'
@@ -134,7 +134,7 @@ async function handleExport() {
     link.click()
     document.body.removeChild(link)
     window.URL.revokeObjectURL(url)
-    ElMessage.success({ message: '导出成功', duration: 1000 })
+    message.success({ message: '导出成功', duration: 1000 })
   } catch (e) {
     console.error(e)
   } finally {

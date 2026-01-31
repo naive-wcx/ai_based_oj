@@ -99,7 +99,7 @@
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { message } from '@/utils/message'
 import { adminApi } from '@/api/admin'
 import { contestApi } from '@/api/contest'
 import { problemApi } from '@/api/problem'
@@ -192,10 +192,10 @@ async function handleSubmit() {
 
     if (isEdit.value) {
       await adminApi.updateContest(route.params.id, payload)
-      ElMessage.success({ message: '更新成功', duration: 1000 })
+      message.success({ message: '更新成功', duration: 1000 })
     } else {
       await adminApi.createContest(payload)
-      ElMessage.success({ message: '创建成功', duration: 1000 })
+      message.success({ message: '创建成功', duration: 1000 })
     }
     router.push('/admin/contests')
   } catch (e) {

@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"oj-system/internal/config"
 	"oj-system/internal/model"
@@ -26,6 +27,11 @@ func NewProblemService() *ProblemService {
 
 // Create 创建题目
 func (s *ProblemService) Create(req *model.ProblemCreateRequest, createdBy uint) (*model.Problem, error) {
+	fileEnabled, inputName, outputName, err := normalizeFileIO(req)
+	if err != nil {
+		return nil, err
+	}
+
 	problem := &model.Problem{
 		Title:         req.Title,
 		Description:   req.Description,
@@ -37,6 +43,9 @@ func (s *ProblemService) Create(req *model.ProblemCreateRequest, createdBy uint)
 		Difficulty:    req.Difficulty,
 		Tags:          req.Tags,
 		AIJudgeConfig: req.AIJudgeConfig,
+		FileIOEnabled: fileEnabled,
+		FileInputName: inputName,
+		FileOutputName: outputName,
 		IsPublic:      req.IsPublic,
 		CreatedBy:     createdBy,
 	}
@@ -89,6 +98,11 @@ func (s *ProblemService) Update(id uint, req *model.ProblemCreateRequest) (*mode
 		return nil, errors.New("题目不存在")
 	}
 
+	fileEnabled, inputName, outputName, err := normalizeFileIO(req)
+	if err != nil {
+		return nil, err
+	}
+
 	problem.Title = req.Title
 	problem.Description = req.Description
 	problem.InputFormat = req.InputFormat
@@ -99,6 +113,9 @@ func (s *ProblemService) Update(id uint, req *model.ProblemCreateRequest) (*mode
 	problem.Difficulty = req.Difficulty
 	problem.Tags = req.Tags
 	problem.AIJudgeConfig = req.AIJudgeConfig
+	problem.FileIOEnabled = fileEnabled
+	problem.FileInputName = inputName
+	problem.FileOutputName = outputName
 	problem.IsPublic = req.IsPublic
 
 	if err := s.repo.Update(problem); err != nil {
@@ -140,6 +157,7 @@ func (s *ProblemService) List(page, size int, difficulty, tag, keyword string) (
 			SubmitCount:   p.SubmitCount,
 			AcceptedCount: p.AcceptedCount,
 			HasAIJudge:    hasAI,
+			HasFileIO:     p.FileIOEnabled,
 		})
 	}
 
@@ -180,6 +198,7 @@ func (s *ProblemService) ListWithUser(page, size int, difficulty, tag, keyword s
 			SubmitCount:   p.SubmitCount,
 			AcceptedCount: p.AcceptedCount,
 			HasAIJudge:    hasAI,
+			HasFileIO:     p.FileIOEnabled,
 			HasAccepted:   hasAccepted,
 		})
 	}
@@ -255,4 +274,38 @@ func (s *ProblemService) DeleteTestcases(problemID uint) error {
 	}
 
 	return s.repo.DeleteTestcases(problemID)
+}
+
+func normalizeFileIO(req *model.ProblemCreateRequest) (bool, string, string, error) {
+	if req == nil || !req.FileIOEnabled {
+		return false, "", "", nil
+	}
+
+	inputName := strings.TrimSpace(req.FileInputName)
+	outputName := strings.TrimSpace(req.FileOutputName)
+
+	if inputName == "" || outputName == "" {
+		return false, "", "", errors.New("文件操作已启用，请填写输入/输出文件名")
+	}
+	if inputName == outputName {
+		return false, "", "", errors.New("输入/输出文件名不能相同")
+	}
+	if err := validateFileName(inputName, ".in"); err != nil {
+		return false, "", "", err
+	}
+	if err := validateFileName(outputName, ".out"); err != nil {
+		return false, "", "", err
+	}
+
+	return true, inputName, outputName, nil
+}
+
+func validateFileName(name string, suffix string) error {
+	if strings.Contains(name, "..") || strings.ContainsAny(name, `/\`) {
+		return errors.New("文件名不合法")
+	}
+	if !strings.HasSuffix(name, suffix) {
+		return errors.New("文件名需以 " + suffix + " 结尾")
+	}
+	return nil
 }

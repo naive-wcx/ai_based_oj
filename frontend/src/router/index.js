@@ -21,6 +21,7 @@ const routes = [
     path: '/submissions',
     name: 'Submissions',
     component: () => import('@/views/submission/SubmissionList.vue'),
+    meta: { requiresAuth: true },
   },
   {
     path: '/contests',
@@ -38,6 +39,7 @@ const routes = [
     path: '/submission/:id',
     name: 'SubmissionDetail',
     component: () => import('@/views/submission/SubmissionDetail.vue'),
+    meta: { requiresAuth: true },
   },
   {
     path: '/rank',

@@ -49,7 +49,7 @@
 <script setup>
 import { ref, reactive } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { message } from '@/utils/message'
 import { useUserStore } from '@/stores/user'
 import { User, Lock } from '@element-plus/icons-vue'
 
@@ -77,7 +77,7 @@ async function handleSubmit() {
   loading.value = true
   try {
     await userStore.login(form)
-    ElMessage.success('登录成功')
+    message.success('登录成功')
     
     const redirect = route.query.redirect || '/'
     router.push(redirect)

@@ -11,7 +11,7 @@ judge:
   workers: 2
   timeout: 30  # 秒
   
-# AI 设置已移至管理后台，此处配置仅作为初始默认值
+# AI 设置仅通过管理后台写入数据库读取，当前代码不会从 config.yaml 读取此段
 ai:
   enabled: false
   provider: deepseek

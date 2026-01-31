@@ -38,6 +38,7 @@
           <router-link :to="`/problem/${row.id}`" class="problem-title">
             <span>{{ row.title }}</span>
             <span v-if="row.has_ai_judge" class="ai-badge">AI</span>
+            <span v-if="row.has_file_io" class="file-io-badge">文件IO</span>
             <el-tag
               v-if="row.has_accepted"
               type="success"
@@ -94,7 +95,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { Search } from '@element-plus/icons-vue'
 import { problemApi } from '@/api/problem'
-import { ElMessage } from 'element-plus'
+import { message } from '@/utils/message'
 import { useRouter, useRoute } from 'vue-router'
 
 const loading = ref(true)
@@ -150,7 +151,7 @@ async function fetchProblems() {
     pagination.total = res.data.total
     updateUrl()
   } catch (e) {
-    ElMessage.error('题目列表加载失败')
+    message.error('题目列表加载失败')
     console.error(e)
   } finally {
     loading.value = false
@@ -222,6 +223,18 @@ onMounted(() => {
   color: #fff;
   background-color: #409eff;
   border: 1px solid #409eff;
+}
+
+.file-io-badge {
+  display: inline-block;
+  padding: 0 6px;
+  font-size: 12px;
+  font-weight: bold;
+  line-height: 18px;
+  border-radius: 4px;
+  color: #fff;
+  background-color: #e67e22;
+  border: 1px solid #e67e22;
 }
 
 .problem-tag {

@@ -11,6 +11,8 @@
 - **AI 智能判题**：调用大模型 API（如 DeepSeek）分析代码，检查是否使用指定算法/语言
 - **灵活配置**：每道题目可独立配置是否启用 AI 判题及具体要求
 - **双重结果**：同时返回测试点评测结果和 AI 分析结果
+- **自助修改密码**：用户可在个人中心修改密码
+- **文件操作题目**：可要求从指定文件读入并输出到指定文件
 
 ### 1.3 部署环境
 - **开发环境**：Windows 主机 / WSL
@@ -196,7 +198,7 @@ oj-system/
 | POST | `/login` | 用户登录 | 公开 |
 | GET | `/profile` | 获取个人信息 | 登录 |
 | PUT | `/profile` | 更新个人信息 | 登录 |
-| POST | `/logout` | 退出登录 | 登录 |
+| PUT | `/password` | 修改密码 | 登录 |
 
 **账号分配说明**
 普通用户账号由管理员在后台统一创建与分配，客户端不再提供注册入口。
@@ -245,6 +247,11 @@ oj-system/
     "memory_limit": 256,          // 内存限制，单位 MB
     "difficulty": "easy|medium|hard",
     "tags": ["数组", "哈希表"],
+
+    // ========== 文件操作 ==========
+    "file_io_enabled": true,      // 是否启用文件操作
+    "file_input_name": "data.in", // 输入文件名
+    "file_output_name": "data.out", // 输出文件名
     
     // ========== AI 判题配置 ==========
     "ai_judge_config": {
@@ -971,7 +978,7 @@ judge:
   workers: 2                 # 判题并发数（根据 CPU 核心数设置）
   timeout: 30                # 单个判题最大时间（秒）
   
-# AI 设置已移至管理后台，此处配置仅作为初始默认值
+# AI 设置仅通过管理后台写入数据库读取，当前代码不会从 config.yaml 读取此段
 ai:
   enabled: false
   provider: deepseek
@@ -1046,7 +1053,7 @@ DATE=$(date +%Y%m%d_%H%M%S)
 
 mkdir -p $BACKUP_DIR
 
-# 备份数据库
+# 备份数据库（以 /opt/oj/configs/config.yaml 中 database.path 为准）
 cp /opt/oj/data/oj.db $BACKUP_DIR/oj_$DATE.db
 
 # 备份题目数据

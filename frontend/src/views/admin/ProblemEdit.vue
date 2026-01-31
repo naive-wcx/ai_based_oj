@@ -136,6 +136,28 @@
       <el-form-item label="是否公开">
         <el-switch v-model="form.is_public" />
       </el-form-item>
+
+      <el-divider content-position="left">文件操作</el-divider>
+
+      <el-form-item label="启用文件操作">
+        <el-switch v-model="form.file_io_enabled" @change="handleFileIOToggle" />
+        <span class="hint">开启后需从指定文件读写（如 data.in / data.out）</span>
+      </el-form-item>
+
+      <template v-if="form.file_io_enabled">
+        <el-form-item label="输入文件名">
+          <el-input
+            v-model="form.file_input_name"
+            placeholder="例如：data.in"
+          />
+        </el-form-item>
+        <el-form-item label="输出文件名">
+          <el-input
+            v-model="form.file_output_name"
+            placeholder="例如：data.out"
+          />
+        </el-form-item>
+      </template>
       
       <el-divider content-position="left">AI 判题配置</el-divider>
       
@@ -282,7 +304,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { message } from '@/utils/message'
 import { problemApi } from '@/api/problem'
 import MarkdownPreview from '@/components/common/MarkdownPreview.vue'
 
@@ -306,6 +328,9 @@ const form = reactive({
   difficulty: 'easy',
   tags: [],
   is_public: true,
+  file_io_enabled: false,
+  file_input_name: '',
+  file_output_name: '',
   ai_judge_config: {
     enabled: false,
     required_algorithm: '',
@@ -351,6 +376,16 @@ function addSample() {
 
 function removeSample(index) {
   form.samples.splice(index, 1)
+}
+
+function handleFileIOToggle(value) {
+  if (value) {
+    if (!form.file_input_name) form.file_input_name = 'data.in'
+    if (!form.file_output_name) form.file_output_name = 'data.out'
+  } else {
+    form.file_input_name = ''
+    form.file_output_name = ''
+  }
 }
 
 async function fetchProblem() {
@@ -401,6 +436,16 @@ async function handleSubmit() {
   // 过滤空样例
   const submitData = { ...form }
   submitData.samples = form.samples.filter(s => s.input || s.output)
+
+  if (submitData.file_io_enabled) {
+    if (!submitData.file_input_name || !submitData.file_output_name) {
+      message.warning('请填写输入/输出文件名')
+      return
+    }
+  } else {
+    submitData.file_input_name = ''
+    submitData.file_output_name = ''
+  }
   
   // 如果没有启用 AI 判题，清空配置
   if (!submitData.ai_judge_config.enabled) {
@@ -411,10 +456,10 @@ async function handleSubmit() {
   try {
     if (isEdit.value) {
       await problemApi.update(route.params.id, submitData)
-      ElMessage.success('保存成功')
+      message.success('保存成功')
     } else {
       const res = await problemApi.create(submitData)
-      ElMessage.success('创建成功')
+      message.success('创建成功')
       router.replace(`/admin/problem/${res.data.id}/edit`)
     }
   } catch (e) {
@@ -426,7 +471,7 @@ async function handleSubmit() {
 
 async function uploadTestcase() {
   if (!inputFile.value || !outputFile.value) {
-    ElMessage.warning('请选择输入和输出文件')
+    message.warning('请选择输入和输出文件')
     return
   }
   
@@ -438,7 +483,7 @@ async function uploadTestcase() {
   uploadingTestcase.value = true
   try {
     await problemApi.uploadTestcase(route.params.id, formData)
-    ElMessage.success('上传成功')
+    message.success('上传成功')
     
     // 清空选择
     inputFile.value = null
@@ -457,7 +502,7 @@ async function uploadTestcase() {
 async function deleteAllTestcases() {
   try {
     await problemApi.deleteTestcases(route.params.id)
-    ElMessage.success('删除成功')
+    message.success('删除成功')
     fetchTestcases()
   } catch (e) {
     console.error(e)

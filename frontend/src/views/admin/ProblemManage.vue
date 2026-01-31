@@ -56,7 +56,8 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessageBox, ElMessage } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
+import { message } from '@/utils/message'
 import { Plus } from '@element-plus/icons-vue'
 import { problemApi } from '@/api/problem'
 import DifficultyBadge from '@/components/problem/DifficultyBadge.vue'
@@ -93,7 +94,7 @@ async function handleDelete(row) {
     })
     
     await problemApi.delete(row.id)
-    ElMessage.success('删除成功')
+    message.success('删除成功')
     fetchProblems()
   } catch (e) {
     if (e !== 'cancel') {

@@ -58,12 +58,6 @@
       </div>
     </div>
     
-    <!-- 展开 AI 总结 -->
-    <el-collapse v-if="result.summary || result.reason" class="raw-response">
-      <el-collapse-item title="查看 AI 总结">
-        <pre>{{ result.summary || result.reason }}</pre>
-      </el-collapse-item>
-    </el-collapse>
   </div>
 </template>
 
@@ -219,18 +213,4 @@ function getConfidenceColor(confidence) {
   }
 }
 
-.raw-response {
-  margin-top: 16px;
-  
-  pre {
-    background: #282c34;
-    color: #abb2bf;
-    padding: 12px;
-    border-radius: 4px;
-    font-size: 12px;
-    overflow-x: auto;
-    max-height: 300px;
-    overflow-y: auto;
-  }
-}
 </style>

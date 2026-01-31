@@ -49,11 +49,11 @@ if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]] || [[ "$OSTYPE" == "
     # 尝试使用 PowerShell 设置环境变量并编译
     export GOOS=linux
     export GOARCH=amd64
-    export CGO_ENABLED=0
+    export CGO_ENABLED=1
 fi
 
 go mod tidy
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o oj-server ./cmd/server
+CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o oj-server ./cmd/server
 cd ..
 
 # 2. 构建前端
@@ -74,11 +74,10 @@ cp deploy/nginx/oj.conf deploy/package/
 
 # 创建 .env 模板
 cat > deploy/package/.env.template << 'EOF'
-# DeepSeek API Key（用于 AI 判题）
-DEEPSEEK_API_KEY=your_api_key_here
-
 # JWT 密钥（请修改为随机字符串）
 JWT_SECRET=your_jwt_secret_here_please_change_it
+
+# AI 判题配置通过管理后台写入数据库，不读取环境变量
 EOF
 
 # 4. 上传到服务器
@@ -134,7 +133,7 @@ log_info "请执行以下步骤完成配置："
 echo ""
 echo "1. SSH 登录服务器: ssh root@$SERVER_IP"
 echo "2. 编辑配置文件: nano /opt/oj/.env"
-echo "3. 设置 DEEPSEEK_API_KEY 和 JWT_SECRET"
+echo "3. 设置 JWT_SECRET"
 echo "4. 重启服务: systemctl restart oj"
 echo ""
 echo "5. (可选) 配置 HTTPS:"

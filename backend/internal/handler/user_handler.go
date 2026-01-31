@@ -73,6 +73,25 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 	c.JSON(http.StatusOK, model.SuccessMessage("更新成功", nil))
 }
 
+// ChangePassword 修改密码
+// PUT /api/v1/user/password
+func (h *UserHandler) ChangePassword(c *gin.Context) {
+	userID := middleware.GetUserID(c)
+
+	var req model.ChangePasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, model.BadRequest("参数错误"))
+		return
+	}
+
+	if err := h.service.ChangePassword(userID, req.OldPassword, req.NewPassword); err != nil {
+		c.JSON(http.StatusBadRequest, model.BadRequest(err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, model.SuccessMessage("修改成功", nil))
+}
+
 // GetRankList 获取排行榜
 // GET /api/v1/rank
 func (h *UserHandler) GetRankList(c *gin.Context) {

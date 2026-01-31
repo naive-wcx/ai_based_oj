@@ -29,6 +29,24 @@
               >
             </div>
 
+            <div v-if="problem.file_io_enabled" class="file-io-section">
+              <el-alert type="warning" :closable="false" show-icon>
+                <template #title>
+                  <strong>本题需要文件操作</strong>
+                </template>
+                <div class="file-io-content">
+                  <div class="file-io-item">
+                    <span>输入：</span>
+                    <el-tag type="info" effect="light">{{ problem.file_input_name }}</el-tag>
+                  </div>
+                  <div class="file-io-item">
+                    <span>输出：</span>
+                    <el-tag type="info" effect="light">{{ problem.file_output_name }}</el-tag>
+                  </div>
+                </div>
+              </el-alert>
+            </div>
+
             <div v-if="problem.ai_judge_config?.enabled" class="ai-section">
               <el-alert type="info" :closable="false" show-icon>
                 <template #title>
@@ -179,7 +197,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { message } from '@/utils/message'
 import { EditPen, CopyDocument } from '@element-plus/icons-vue'
 import { Splitpanes, Pane } from 'splitpanes'
 import 'splitpanes/dist/splitpanes.css'
@@ -215,9 +233,9 @@ const getDifficultyTag = (difficulty) => {
 async function copyToClipboard(text) {
   try {
     await navigator.clipboard.writeText(text);
-    ElMessage.success('已复制到剪切板');
+    message.success('已复制到剪切板');
   } catch (err) {
-    ElMessage.error('复制失败');
+    message.error('复制失败');
     console.error('Failed to copy: ', err);
   }
 }
@@ -228,7 +246,7 @@ async function fetchProblem() {
     const res = await problemApi.getById(route.params.id)
     problem.value = res.data
   } catch (e) {
-    ElMessage.error('题目加载失败')
+    message.error('题目加载失败')
     console.error(e)
   } finally {
     loading.value = false
@@ -237,13 +255,13 @@ async function fetchProblem() {
 
 async function handleSubmit() {
   if (!userStore.isLoggedIn) {
-    ElMessage.warning('请先登录再提交')
+    message.warning('请先登录再提交')
     router.push({ name: 'Login', query: { redirect: route.fullPath } })
     return
   }
 
   if (!submission.code.trim()) {
-    ElMessage.warning('提交的代码不能为空')
+    message.warning('提交的代码不能为空')
     return
   }
 
@@ -254,7 +272,7 @@ async function handleSubmit() {
       language: submission.language,
       code: submission.code,
     })
-    ElMessage.success('提交成功！正在跳转到评测记录...')
+    message.success('提交成功！正在跳转到评测记录...')
     router.push(`/submission/${res.data.id}`)
   } catch (e) {
     // Error message is likely handled by the request interceptor
@@ -354,6 +372,24 @@ onMounted(() => {
     .ai-feature-tag {
       margin: 0 4px;
     }
+  }
+}
+
+.file-io-section {
+  margin-bottom: 24px;
+
+  .file-io-content {
+    margin-top: 8px;
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    font-size: 14px;
+  }
+
+  .file-io-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
 }
 

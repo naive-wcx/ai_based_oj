@@ -49,7 +49,7 @@
 <script setup>
 import { useUserStore } from '@/stores/user'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { message } from '@/utils/message'
 import { ArrowDown, User, Setting, SwitchButton } from '@element-plus/icons-vue'
 import logoUrl from '@/assets/logo.png'
 
@@ -58,7 +58,7 @@ const router = useRouter()
 
 function handleLogout() {
   userStore.logout()
-  ElMessage.success('已退出登录')
+  message.success('已退出登录')
   router.push('/')
 }
 </script>

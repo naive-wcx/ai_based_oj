@@ -62,6 +62,10 @@ func (h *SubmissionHandler) GetByID(c *gin.Context) {
 
 	submission, err := h.service.GetByID(id, userID, isAdmin)
 	if err != nil {
+		if err == service.ErrSubmissionForbidden {
+			c.JSON(http.StatusForbidden, model.Forbidden(err.Error()))
+			return
+		}
 		c.JSON(http.StatusNotFound, model.NotFound(err.Error()))
 		return
 	}
@@ -75,8 +79,15 @@ func (h *SubmissionHandler) List(c *gin.Context) {
 	page := getIntQuery(c, "page", 1)
 	size := getIntQuery(c, "size", 20)
 	problemID := getUintQuery(c, "problem_id")
-	userID := getUintQuery(c, "user_id")
 	status := c.Query("status")
+
+	currentUserID := middleware.GetUserID(c)
+	isAdmin := middleware.IsAdmin(c)
+
+	userID := currentUserID
+	if isAdmin {
+		userID = getUintQuery(c, "user_id")
+	}
 
 	data, err := h.service.List(page, size, problemID, userID, status)
 	if err != nil {

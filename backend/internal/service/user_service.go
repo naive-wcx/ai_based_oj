@@ -212,6 +212,33 @@ func (s *UserService) UpdateProfile(userID uint, email, studentID string) error 
 	return s.repo.Update(user)
 }
 
+// ChangePassword 修改用户密码（本人）
+func (s *UserService) ChangePassword(userID uint, oldPassword, newPassword string) error {
+	if len(newPassword) < 6 || len(newPassword) > 20 {
+		return errors.New("密码长度应为 6-20")
+	}
+	if oldPassword == newPassword {
+		return errors.New("新密码不能与原密码相同")
+	}
+
+	user, err := s.repo.GetByID(userID)
+	if err != nil {
+		return errors.New("用户不存在")
+	}
+
+	if !utils.CheckPassword(oldPassword, user.PasswordHash) {
+		return errors.New("原密码错误")
+	}
+
+	hashedPassword, err := utils.HashPassword(newPassword)
+	if err != nil {
+		return errors.New("密码加密失败")
+	}
+	user.PasswordHash = hashedPassword
+
+	return s.repo.Update(user)
+}
+
 // GetRankList 获取排行榜
 func (s *UserService) GetRankList(page, size int) ([]model.UserInfo, int64, error) {
 	users, total, err := s.repo.List(page, size)

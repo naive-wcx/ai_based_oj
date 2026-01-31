@@ -62,7 +62,8 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessageBox, ElMessage } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
+import { message } from '@/utils/message'
 import { contestApi } from '@/api/contest'
 import { adminApi } from '@/api/admin'
 
@@ -104,7 +105,7 @@ async function handleDelete(row) {
       type: 'warning',
     })
     await adminApi.deleteContest(row.id)
-    ElMessage.success('删除成功')
+    message.success('删除成功')
     fetchContests()
   } catch (e) {
     if (e !== 'cancel') {

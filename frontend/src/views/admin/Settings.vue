@@ -133,7 +133,7 @@
 
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
-import { ElMessage } from 'element-plus'
+import { message } from '@/utils/message'
 import { adminApi } from '@/api/admin'
 
 const loading = ref(false)
@@ -172,7 +172,7 @@ async function handleSave() {
   saving.value = true
   try {
     await adminApi.updateAISettings(form)
-    ElMessage.success('设置已保存')
+    message.success('设置已保存')
   } catch (e) {
     console.error(e)
   } finally {
@@ -184,7 +184,7 @@ async function handleTest() {
   testing.value = true
   try {
     const res = await adminApi.testAIConnection()
-    ElMessage.success('连接成功！配置有效')
+    message.success('连接成功！配置有效')
   } catch (e) {
     console.error(e)
   } finally {

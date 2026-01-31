@@ -3,6 +3,7 @@ package judge
 import (
 	"log"
 	"os"
+	"path/filepath"
 
 	"oj-system/internal/config"
 	"oj-system/internal/judge/ai"
@@ -129,6 +130,9 @@ func (j *Judger) Handle(task *queue.JudgeTask) {
 func (j *Judger) runTestcases(submission *model.Submission, problem *model.Problem, testcases []model.Testcase) []model.TestcaseResult {
 	var results []model.TestcaseResult
 	workDir := sandbox.GetWorkDir(submission.ID)
+	fileIOEnabled := problem.FileIOEnabled && problem.FileInputName != "" && problem.FileOutputName != ""
+	inputName := filepath.Base(problem.FileInputName)
+	outputName := filepath.Base(problem.FileOutputName)
 
 	for i, tc := range testcases {
 		// 读取输入输出
@@ -153,11 +157,29 @@ func (j *Judger) runTestcases(submission *model.Submission, problem *model.Probl
 		}
 
 		// 执行代码
+		if fileIOEnabled {
+			inputPath := filepath.Join(workDir, inputName)
+			outputPath := filepath.Join(workDir, outputName)
+			if err := os.WriteFile(inputPath, input, 0644); err != nil {
+				results = append(results, model.TestcaseResult{
+					ID:      i + 1,
+					Status:  model.StatusSystemError,
+					Message: "写入输入文件失败",
+				})
+				continue
+			}
+			_ = os.Remove(outputPath)
+		}
+
+		execInput := string(input)
+		if fileIOEnabled {
+			execInput = ""
+		}
 		execResult, err := j.sandbox.Execute(
 			workDir,
 			submission.Language,
 			submission.Code,
-			string(input),
+			execInput,
 			problem.TimeLimit,
 			problem.MemoryLimit,
 		)
@@ -198,7 +220,20 @@ func (j *Judger) runTestcases(submission *model.Submission, problem *model.Probl
 
 		// 如果运行成功，比较输出
 		if execResult.Status == "OK" {
-			if sandbox.CompareOutput(string(expectedOutput), execResult.Output) {
+			actualOutput := execResult.Output
+			if fileIOEnabled {
+				outputPath := filepath.Join(workDir, outputName)
+				outData, err := os.ReadFile(outputPath)
+				if err != nil {
+					result.Status = model.StatusWrongAnswer
+					result.Message = "未生成输出文件"
+					results = append(results, result)
+					continue
+				}
+				actualOutput = string(outData)
+			}
+
+			if sandbox.CompareOutput(string(expectedOutput), actualOutput) {
 				result.Status = model.StatusAccepted
 			} else {
 				result.Status = model.StatusWrongAnswer
