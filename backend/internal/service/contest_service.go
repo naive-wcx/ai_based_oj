@@ -213,10 +213,7 @@ func (s *ContestService) GetLeaderboard(contestID uint) (*model.Contest, []uint,
 			userMap[sub.UserID] = entry
 		}
 
-		current := entry.scores[sub.ProblemID]
-		if sub.Score > current {
-			entry.scores[sub.ProblemID] = sub.Score
-		}
+		entry.scores[sub.ProblemID] = sub.Score
 	}
 
 	entries := make([]model.ContestLeaderboardEntry, 0, len(userMap))

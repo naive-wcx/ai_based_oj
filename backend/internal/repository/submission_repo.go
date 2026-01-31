@@ -156,6 +156,8 @@ func (r *SubmissionRepository) ListForContest(problemIDs []uint, startAt, endAt 
 	if len(problemIDs) == 0 {
 		return []model.ContestSubmission{}, nil
 	}
+	startAt = startAt.In(time.Local)
+	endAt = endAt.In(time.Local)
 
 	var submissions []model.ContestSubmission
 	err := r.db.Table("submissions").
@@ -163,7 +165,7 @@ func (r *SubmissionRepository) ListForContest(problemIDs []uint, startAt, endAt 
 		Joins("LEFT JOIN users ON submissions.user_id = users.id").
 		Where("submissions.problem_id IN ?", problemIDs).
 		Where("submissions.created_at >= ? AND submissions.created_at <= ?", startAt, endAt).
-		Order("submissions.created_at ASC").
+		Order("submissions.created_at ASC, submissions.id ASC").
 		Scan(&submissions).Error
 
 	if err != nil {
@@ -195,6 +197,8 @@ func (r *SubmissionRepository) GetAcceptedProblemIDsInRange(userID uint, problem
 	if userID == 0 || len(problemIDs) == 0 {
 		return []uint{}, nil
 	}
+	startAt = startAt.In(time.Local)
+	endAt = endAt.In(time.Local)
 	var ids []uint
 	err := r.db.Model(&model.Submission{}).
 		Where("user_id = ? AND status = ?", userID, model.StatusAccepted).
@@ -208,11 +212,66 @@ func (r *SubmissionRepository) GetAcceptedProblemIDsInRange(userID uint, problem
 	return ids, nil
 }
 
+// GetSubmittedProblemIDsInRange 获取用户在时间范围内提交过的题目 ID 列表
+func (r *SubmissionRepository) GetSubmittedProblemIDsInRange(userID uint, problemIDs []uint, startAt, endAt time.Time) ([]uint, error) {
+	if userID == 0 || len(problemIDs) == 0 {
+		return []uint{}, nil
+	}
+	startAt = startAt.In(time.Local)
+	endAt = endAt.In(time.Local)
+	var ids []uint
+	err := r.db.Model(&model.Submission{}).
+		Where("user_id = ?", userID).
+		Where("problem_id IN ?", problemIDs).
+		Where("created_at >= ? AND created_at <= ?", startAt, endAt).
+		Distinct().
+		Pluck("problem_id", &ids).Error
+	if err != nil {
+		return nil, err
+	}
+	return ids, nil
+}
+
+// GetUserLastScoresInRange 获取用户在时间范围内每题最后一次提交的分数
+func (r *SubmissionRepository) GetUserLastScoresInRange(userID uint, problemIDs []uint, startAt, endAt time.Time) (map[uint]int, error) {
+	if userID == 0 || len(problemIDs) == 0 {
+		return map[uint]int{}, nil
+	}
+	startAt = startAt.In(time.Local)
+	endAt = endAt.In(time.Local)
+
+	type row struct {
+		ProblemID uint `gorm:"column:problem_id"`
+		Score     int  `gorm:"column:score"`
+		CreatedAt time.Time `gorm:"column:created_at"`
+		ID        uint `gorm:"column:id"`
+	}
+
+	var rows []row
+	err := r.db.Model(&model.Submission{}).
+		Select("problem_id, score, created_at, id").
+		Where("user_id = ? AND problem_id IN ?", userID, problemIDs).
+		Where("created_at >= ? AND created_at <= ?", startAt, endAt).
+		Order("created_at ASC, id ASC").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[uint]int, len(problemIDs))
+	for _, r := range rows {
+		result[r.ProblemID] = r.Score
+	}
+	return result, nil
+}
+
 // GetUserBestScoresInRange 获取用户在时间范围内每题最高分
 func (r *SubmissionRepository) GetUserBestScoresInRange(userID uint, problemIDs []uint, startAt, endAt time.Time) (map[uint]int, error) {
 	if userID == 0 || len(problemIDs) == 0 {
 		return map[uint]int{}, nil
 	}
+	startAt = startAt.In(time.Local)
+	endAt = endAt.In(time.Local)
 
 	type row struct {
 		ProblemID uint `gorm:"column:problem_id"`

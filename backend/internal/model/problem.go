@@ -157,4 +157,6 @@ type ProblemListItem struct {
 	HasAIJudge    bool     `json:"has_ai_judge"`
 	HasFileIO     bool     `json:"has_file_io"`
 	HasAccepted   bool     `json:"has_accepted"`
+	HasSubmitted  bool     `json:"has_submitted"`
+	IsPublic      bool     `json:"is_public"`
 }

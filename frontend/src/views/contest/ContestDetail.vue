@@ -27,6 +27,7 @@
               {{ row.title }}
             </router-link>
             <el-tag v-if="row.has_accepted" type="success" size="small" class="accepted-tag">已通过</el-tag>
+            <el-tag v-else-if="row.has_submitted" type="info" size="small" class="accepted-tag">已提交</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="难度" width="120">

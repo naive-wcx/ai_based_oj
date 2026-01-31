@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -77,22 +78,32 @@ func (h *ContestHandler) GetByID(c *gin.Context) {
 	}
 
 	acceptedSet := map[uint]struct{}{}
+	submittedSet := map[uint]struct{}{}
+	showAccepted := isAdmin || strings.ToLower(contest.Type) == "ioi" || !time.Now().Before(contest.EndAt)
 	if userID > 0 {
-		acceptedIDs, err := h.submissionRepo.GetAcceptedProblemIDsInRange(userID, []uint(contest.ProblemIDs), contest.StartAt, contest.EndAt)
+		submittedIDs, err := h.submissionRepo.GetSubmittedProblemIDsInRange(userID, []uint(contest.ProblemIDs), contest.StartAt, contest.EndAt)
 		if err == nil {
-			for _, pid := range acceptedIDs {
-				acceptedSet[pid] = struct{}{}
+			for _, pid := range submittedIDs {
+				submittedSet[pid] = struct{}{}
+			}
+		}
+		if showAccepted {
+			acceptedIDs, err := h.submissionRepo.GetAcceptedProblemIDsInRange(userID, []uint(contest.ProblemIDs), contest.StartAt, contest.EndAt)
+			if err == nil {
+				for _, pid := range acceptedIDs {
+					acceptedSet[pid] = struct{}{}
+				}
 			}
 		}
 	}
 
-	ordered := buildContestProblemList(contest.ProblemIDs, problems, acceptedSet)
+	ordered := buildContestProblemList(contest.ProblemIDs, problems, acceptedSet, submittedSet, showAccepted)
 
 	var myTotal *int
 	if userID > 0 {
-		showScore := contest.Type == "ioi" || !time.Now().Before(contest.EndAt)
+		showScore := strings.ToLower(contest.Type) == "ioi" || !time.Now().Before(contest.EndAt)
 		if showScore {
-			scoreMap, err := h.submissionRepo.GetUserBestScoresInRange(userID, []uint(contest.ProblemIDs), contest.StartAt, contest.EndAt)
+			scoreMap, err := h.submissionRepo.GetUserLastScoresInRange(userID, []uint(contest.ProblemIDs), contest.StartAt, contest.EndAt)
 			if err == nil {
 				total := 0
 				for _, pid := range contest.ProblemIDs {
@@ -234,7 +245,7 @@ func (h *ContestHandler) ExportLeaderboard(c *gin.Context) {
 	}
 }
 
-func buildContestProblemList(ids model.UintList, problems []model.Problem, acceptedSet map[uint]struct{}) []model.ProblemListItem {
+func buildContestProblemList(ids model.UintList, problems []model.Problem, acceptedSet, submittedSet map[uint]struct{}, showAccepted bool) []model.ProblemListItem {
 	result := make([]model.ProblemListItem, 0, len(ids))
 	problemMap := make(map[uint]model.Problem, len(problems))
 	for _, problem := range problems {
@@ -246,6 +257,7 @@ func buildContestProblemList(ids model.UintList, problems []model.Problem, accep
 			continue
 		}
 		_, hasAccepted := acceptedSet[id]
+		_, hasSubmitted := submittedSet[id]
 		result = append(result, model.ProblemListItem{
 			ID:            problem.ID,
 			Title:         problem.Title,
@@ -254,7 +266,10 @@ func buildContestProblemList(ids model.UintList, problems []model.Problem, accep
 			SubmitCount:   problem.SubmitCount,
 			AcceptedCount: problem.AcceptedCount,
 			HasAIJudge:    problem.AIJudgeConfig != nil && problem.AIJudgeConfig.Enabled,
-			HasAccepted:   hasAccepted,
+			HasFileIO:     problem.FileIOEnabled,
+			HasAccepted:   showAccepted && hasAccepted,
+			HasSubmitted:  hasSubmitted,
+			IsPublic:      problem.IsPublic,
 		})
 	}
 	return result

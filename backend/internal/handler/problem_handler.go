@@ -28,8 +28,9 @@ func (h *ProblemHandler) List(c *gin.Context) {
 	tag := c.Query("tag")
 	keyword := c.Query("keyword")
 	userID := middleware.GetUserID(c)
+	isAdmin := middleware.IsAdmin(c)
 
-	problems, total, err := h.service.ListWithUser(page, size, difficulty, tag, keyword, userID)
+	problems, total, err := h.service.ListWithUser(page, size, difficulty, tag, keyword, userID, isAdmin)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, model.ServerError("获取题目列表失败"))
 		return
@@ -53,8 +54,13 @@ func (h *ProblemHandler) GetByID(c *gin.Context) {
 	}
 
 	userID := middleware.GetUserID(c)
-	problem, err := h.service.GetByIDWithUser(id, userID)
+	isAdmin := middleware.IsAdmin(c)
+	problem, err := h.service.GetByIDWithUser(id, userID, isAdmin)
 	if err != nil {
+		if err.Error() == "无权限访问该题目" {
+			c.JSON(http.StatusForbidden, model.Forbidden(err.Error()))
+			return
+		}
 		c.JSON(http.StatusNotFound, model.NotFound(err.Error()))
 		return
 	}

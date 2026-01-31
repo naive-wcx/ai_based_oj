@@ -10,7 +10,14 @@
     <div class="card">
       <el-table :data="problems" v-loading="loading" stripe>
         <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column prop="title" label="题目" min-width="200" />
+        <el-table-column label="题目" min-width="220">
+          <template #default="{ row }">
+            <span>{{ row.title }}</span>
+            <el-tag v-if="row.is_public === false" type="warning" size="small" class="hidden-tag">
+              隐藏
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="难度" width="100">
           <template #default="{ row }">
             <DifficultyBadge :difficulty="row.difficulty" />
@@ -124,5 +131,9 @@ onMounted(() => {
   margin-top: 20px;
   display: flex;
   justify-content: flex-end;
+}
+
+.hidden-tag {
+  margin-left: 8px;
 }
 </style>

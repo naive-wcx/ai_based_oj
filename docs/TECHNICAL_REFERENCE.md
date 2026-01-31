@@ -318,6 +318,7 @@ func NewProblemRepository() *ProblemRepository
 | `Update(problem *Problem) error` | 更新题目 |
 | `Delete(id uint) error` | 删除题目（含测试用例） |
 | `List(page, size int, difficulty, tag, keyword string) ([]Problem, int64, error)` | 分页列表（支持筛选） |
+| `ListAll(page, size int, difficulty, tag, keyword string) ([]Problem, int64, error)` | 分页列表（包含隐藏题） |
 | `GetTestcases(problemID uint) ([]Testcase, error)` | 获取测试用例 |
 | `CreateTestcase(testcase *Testcase) error` | 创建测试用例 |
 | `DeleteTestcases(problemID uint) error` | 删除所有测试用例 |
@@ -591,6 +592,9 @@ type Claims struct {
 }
 ```
 
+**说明**:
+- `is_public=false` 表示隐藏题：仅管理员或参赛用户可访问（要求比赛已开始），赛后参赛用户仍可访问。
+
 **成功响应** (200):
 ```json
 {
@@ -638,7 +642,9 @@ type Claims struct {
 | `difficulty` | string | 难度筛选：easy/medium/hard |
 | `tag` | string | 标签筛选 |
 | `keyword` | string | 关键词搜索 |
-**说明**: 登录状态下会返回 `has_accepted` 标识用户是否已通过题目
+**说明**: 
+- 未登录/普通用户仅返回公开题目（`is_public=true`），管理员登录可返回全部题目
+- 登录状态下会返回 `has_accepted` 标识用户是否已通过题目
 
 **成功响应** (200):
 ```json
@@ -671,7 +677,9 @@ type Claims struct {
 #### GET `/:id` - 获取题目详情
 
 **路径参数**: `id` - 题目 ID
-**说明**: 登录状态下会返回 `has_accepted` 标识用户是否已通过题目
+**说明**: 
+- 登录状态下会返回 `has_accepted` 标识用户是否已通过题目
+- 当题目为隐藏题时，仅管理员或参赛用户可访问（要求比赛已开始），赛后参赛用户仍可访问
 
 **成功响应** (200):
 ```json
@@ -1136,7 +1144,7 @@ type Claims struct {
 #### GET `/contests/:id/leaderboard` - 比赛排行榜（管理员）
 
 **认证**: 需要 Bearer Token + 管理员权限
-**说明**: OI/IOI 赛制均按每题最高分汇总
+**说明**: OI/IOI 赛制均按每题最后一次提交得分汇总
 
 **成功响应** (200):
 ```json

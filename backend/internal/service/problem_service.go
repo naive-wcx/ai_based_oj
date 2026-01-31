@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"oj-system/internal/config"
 	"oj-system/internal/model"
@@ -16,12 +17,16 @@ import (
 type ProblemService struct {
 	repo *repository.ProblemRepository
 	submissionRepo *repository.SubmissionRepository
+	contestRepo *repository.ContestRepository
+	userRepo *repository.UserRepository
 }
 
 func NewProblemService() *ProblemService {
 	return &ProblemService{
 		repo: repository.NewProblemRepository(),
 		submissionRepo: repository.NewSubmissionRepository(),
+		contestRepo: repository.NewContestRepository(),
+		userRepo: repository.NewUserRepository(),
 	}
 }
 
@@ -79,10 +84,15 @@ func (s *ProblemService) GetByID(id uint) (*model.Problem, error) {
 }
 
 // GetByIDWithUser 获取题目详情（含通过标识）
-func (s *ProblemService) GetByIDWithUser(id uint, userID uint) (*model.Problem, error) {
+func (s *ProblemService) GetByIDWithUser(id uint, userID uint, isAdmin bool) (*model.Problem, error) {
 	problem, err := s.repo.GetByID(id)
 	if err != nil {
 		return nil, errors.New("题目不存在")
+	}
+	if !problem.IsPublic && !isAdmin {
+		if !s.canAccessHiddenProblem(problem.ID, userID) {
+			return nil, errors.New("无权限访问该题目")
+		}
 	}
 	if userID > 0 {
 		hasAccepted := s.submissionRepo.HasAccepted(userID, id)
@@ -158,6 +168,7 @@ func (s *ProblemService) List(page, size int, difficulty, tag, keyword string) (
 			AcceptedCount: p.AcceptedCount,
 			HasAIJudge:    hasAI,
 			HasFileIO:     p.FileIOEnabled,
+			IsPublic:      p.IsPublic,
 		})
 	}
 
@@ -165,8 +176,17 @@ func (s *ProblemService) List(page, size int, difficulty, tag, keyword string) (
 }
 
 // ListWithUser 获取题目列表（含通过标识）
-func (s *ProblemService) ListWithUser(page, size int, difficulty, tag, keyword string, userID uint) ([]model.ProblemListItem, int64, error) {
-	problems, total, err := s.repo.List(page, size, difficulty, tag, keyword)
+func (s *ProblemService) ListWithUser(page, size int, difficulty, tag, keyword string, userID uint, isAdmin bool) ([]model.ProblemListItem, int64, error) {
+	var (
+		problems []model.Problem
+		total    int64
+		err      error
+	)
+	if isAdmin {
+		problems, total, err = s.repo.ListAll(page, size, difficulty, tag, keyword)
+	} else {
+		problems, total, err = s.repo.List(page, size, difficulty, tag, keyword)
+	}
 	if err != nil {
 		return nil, 0, err
 	}
@@ -200,10 +220,42 @@ func (s *ProblemService) ListWithUser(page, size int, difficulty, tag, keyword s
 			HasAIJudge:    hasAI,
 			HasFileIO:     p.FileIOEnabled,
 			HasAccepted:   hasAccepted,
+			IsPublic:      p.IsPublic,
 		})
 	}
 
 	return items, total, nil
+}
+
+func (s *ProblemService) canAccessHiddenProblem(problemID uint, userID uint) bool {
+	if userID == 0 {
+		return false
+	}
+	user, err := s.userRepo.GetByID(userID)
+	if err != nil {
+		return false
+	}
+	if strings.ToLower(user.Role) == "admin" {
+		return true
+	}
+
+	contests, err := s.contestRepo.ListAll()
+	if err != nil {
+		return false
+	}
+	now := time.Now()
+	for _, contest := range contests {
+		if now.Before(contest.StartAt) {
+			continue
+		}
+		if !containsUint([]uint(contest.ProblemIDs), problemID) {
+			continue
+		}
+		if canAccessContest(&contest, userID, user.Group) {
+			return true
+		}
+	}
+	return false
 }
 
 // GetTestcases 获取测试用例

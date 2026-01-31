@@ -38,6 +38,13 @@ func (s *SubmissionService) Submit(req *model.SubmissionCreateRequest, userID ui
 	if err != nil {
 		return nil, errors.New("题目不存在")
 	}
+	if !problem.IsPublic {
+		if ok, err := s.canAccessHiddenProblem(problem.ID, userID); err != nil {
+			return nil, errors.New("校验题目权限失败")
+		} else if !ok {
+			return nil, errors.New("题目未开放")
+		}
+	}
 
 	// 验证语言
 	if !isValidLanguage(req.Language) {
@@ -258,4 +265,36 @@ func (s *SubmissionService) maskListForOngoingOI(items []model.SubmissionListIte
 	}
 
 	return items
+}
+
+func (s *SubmissionService) canAccessHiddenProblem(problemID uint, userID uint) (bool, error) {
+	if userID == 0 {
+		return false, nil
+	}
+	user, err := s.userRepo.GetByID(userID)
+	if err != nil {
+		return false, err
+	}
+	if strings.ToLower(user.Role) == "admin" {
+		return true, nil
+	}
+
+	contests, err := s.contestRepo.ListAll()
+	if err != nil {
+		return false, err
+	}
+	now := time.Now()
+	for _, contest := range contests {
+		if now.Before(contest.StartAt) {
+			continue
+		}
+		if !containsUint([]uint(contest.ProblemIDs), problemID) {
+			continue
+		}
+		if canAccessContest(&contest, userID, user.Group) {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }

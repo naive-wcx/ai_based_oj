@@ -84,6 +84,33 @@ func (r *ProblemRepository) List(page, size int, difficulty string, tag string, 
 	return problems, total, nil
 }
 
+// ListAll 获取题目列表（包含隐藏题）
+func (r *ProblemRepository) ListAll(page, size int, difficulty string, tag string, keyword string) ([]model.Problem, int64, error) {
+	var problems []model.Problem
+	var total int64
+
+	query := r.db.Model(&model.Problem{})
+
+	if difficulty != "" {
+		query = query.Where("difficulty = ?", difficulty)
+	}
+	if tag != "" {
+		query = query.Where("tags LIKE ?", "%"+tag+"%")
+	}
+	if keyword != "" {
+		query = query.Where("title LIKE ? OR description LIKE ?", "%"+keyword+"%", "%"+keyword+"%")
+	}
+
+	query.Count(&total)
+
+	offset := (page - 1) * size
+	if err := query.Offset(offset).Limit(size).Order("id ASC").Find(&problems).Error; err != nil {
+		return nil, 0, err
+	}
+
+	return problems, total, nil
+}
+
 // GetTestcases 获取题目的测试用例
 func (r *ProblemRepository) GetTestcases(problemID uint) ([]model.Testcase, error) {
 	var testcases []model.Testcase
