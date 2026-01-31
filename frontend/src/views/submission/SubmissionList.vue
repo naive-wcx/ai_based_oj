@@ -142,6 +142,7 @@ const statusMap = {
   'Pending': { label: '等待中', type: 'info' },
   'Judging': { label: '评测中', type: 'primary' },
   'Accepted': { label: '通过', type: 'success' },
+  'Submitted': { label: '已提交', type: 'info' },
   'Wrong Answer': { label: '答案错误', type: 'danger' },
   'Time Limit Exceeded': { label: '超时', type: 'warning' },
   'Memory Limit Exceeded': { label: '内存超限', type: 'warning' },

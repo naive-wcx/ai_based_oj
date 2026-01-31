@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"oj-system/internal/config"
 	"oj-system/internal/model"
@@ -17,6 +19,7 @@ type SubmissionService struct {
 	repo        *repository.SubmissionRepository
 	problemRepo *repository.ProblemRepository
 	userRepo    *repository.UserRepository
+	contestRepo *repository.ContestRepository
 }
 
 func NewSubmissionService() *SubmissionService {
@@ -24,6 +27,7 @@ func NewSubmissionService() *SubmissionService {
 		repo:        repository.NewSubmissionRepository(),
 		problemRepo: repository.NewProblemRepository(),
 		userRepo:    repository.NewUserRepository(),
+		contestRepo: repository.NewContestRepository(),
 	}
 }
 
@@ -93,14 +97,22 @@ func (s *SubmissionService) GetByID(id uint, userID uint, isAdmin bool) (*model.
 		return nil, ErrSubmissionForbidden
 	}
 
+	if !isAdmin {
+		s.maskSubmissionForOngoingOI(submission, userID)
+	}
+
 	return submission, nil
 }
 
 // List 获取提交列表
-func (s *SubmissionService) List(page, size int, problemID, userID uint, status string) (*model.PageData, error) {
-	items, total, err := s.repo.List(page, size, problemID, userID, status)
+func (s *SubmissionService) List(page, size int, problemID, filterUserID uint, status string, viewerID uint, isAdmin bool) (*model.PageData, error) {
+	items, total, err := s.repo.List(page, size, problemID, filterUserID, status)
 	if err != nil {
 		return nil, err
+	}
+
+	if !isAdmin {
+		items = s.maskListForOngoingOI(items, viewerID)
 	}
 
 	return &model.PageData{
@@ -154,4 +166,96 @@ func getLanguageExtension(lang string) string {
 		return ext
 	}
 	return ".txt"
+}
+
+func (s *SubmissionService) maskSubmissionForOngoingOI(submission *model.Submission, viewerID uint) {
+	if submission == nil || viewerID == 0 {
+		return
+	}
+	user, err := s.userRepo.GetByID(viewerID)
+	if err != nil {
+		return
+	}
+
+	contests, err := s.contestRepo.ListAll()
+	if err != nil {
+		return
+	}
+
+	now := time.Now()
+	for _, contest := range contests {
+		if strings.ToLower(contest.Type) != "oi" {
+			continue
+		}
+		if now.Before(contest.StartAt) || !now.Before(contest.EndAt) {
+			continue
+		}
+		if !canAccessContest(&contest, viewerID, user.Group) {
+			continue
+		}
+		if !containsUint([]uint(contest.ProblemIDs), submission.ProblemID) {
+			continue
+		}
+		if submission.CreatedAt.Before(contest.StartAt) || submission.CreatedAt.After(contest.EndAt) {
+			continue
+		}
+
+		if submission.Status != model.StatusPending && submission.Status != model.StatusJudging {
+			submission.Status = "Submitted"
+		}
+		submission.Score = 0
+		submission.TimeUsed = 0
+		submission.MemoryUsed = 0
+		submission.TestcaseResults = nil
+		submission.AIJudgeResult = nil
+		submission.CompileError = ""
+		submission.FinalMessage = ""
+		return
+	}
+}
+
+func (s *SubmissionService) maskListForOngoingOI(items []model.SubmissionListItem, viewerID uint) []model.SubmissionListItem {
+	if viewerID == 0 || len(items) == 0 {
+		return items
+	}
+	user, err := s.userRepo.GetByID(viewerID)
+	if err != nil {
+		return items
+	}
+
+	contests, err := s.contestRepo.ListAll()
+	if err != nil {
+		return items
+	}
+
+	now := time.Now()
+	for i := range items {
+		for _, contest := range contests {
+			if strings.ToLower(contest.Type) != "oi" {
+				continue
+			}
+			if now.Before(contest.StartAt) || !now.Before(contest.EndAt) {
+				continue
+			}
+			if !canAccessContest(&contest, viewerID, user.Group) {
+				continue
+			}
+			if !containsUint([]uint(contest.ProblemIDs), items[i].ProblemID) {
+				continue
+			}
+			if items[i].CreatedAt.Before(contest.StartAt) || items[i].CreatedAt.After(contest.EndAt) {
+				continue
+			}
+
+			if items[i].Status != model.StatusPending && items[i].Status != model.StatusJudging {
+				items[i].Status = "Submitted"
+			}
+			items[i].TimeUsed = 0
+			items[i].MemoryUsed = 0
+			items[i].Score = 0
+			break
+		}
+	}
+
+	return items
 }

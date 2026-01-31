@@ -89,7 +89,7 @@ func (h *SubmissionHandler) List(c *gin.Context) {
 		userID = getUintQuery(c, "user_id")
 	}
 
-	data, err := h.service.List(page, size, problemID, userID, status)
+	data, err := h.service.List(page, size, problemID, userID, status, currentUserID, isAdmin)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, model.ServerError("获取提交列表失败"))
 		return
@@ -108,7 +108,7 @@ func (h *SubmissionHandler) GetMySubmissions(c *gin.Context) {
 
 	userID := middleware.GetUserID(c)
 
-	data, err := h.service.List(page, size, problemID, userID, status)
+	data, err := h.service.List(page, size, problemID, userID, status, userID, false)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, model.ServerError("获取提交列表失败"))
 		return

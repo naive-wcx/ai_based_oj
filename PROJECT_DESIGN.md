@@ -450,6 +450,8 @@ POST /api/v1/admin/contests
 }
 ```
 
+**说明**：`allowed_users` 与 `allowed_groups` 至少填写一个，否则普通用户无法看到/参加比赛。
+
 ---
 
 ## 6. AI 判题系统设计

@@ -29,16 +29,16 @@
             {{ languageLabels[submission.language] || submission.language }}
           </el-descriptions-item>
            <el-descriptions-item label="用时" label-align="center" align="center">
-            <span v-if="submission.time_used != null">{{ submission.time_used }}ms</span>
+            <span v-if="submission.status !== 'Submitted' && submission.time_used != null">{{ submission.time_used }}ms</span>
             <span v-else>-</span>
           </el-descriptions-item>
           <el-descriptions-item label="内存" label-align="center" align="center">
-            <span v-if="submission.memory_used != null">{{ formatMemory(submission.memory_used) }}</span>
+            <span v-if="submission.status !== 'Submitted' && submission.memory_used != null">{{ formatMemory(submission.memory_used) }}</span>
             <span v-else>-</span>
           </el-descriptions-item>
           <el-descriptions-item label="分数" label-align="center" align="center">
-             <span :class="getScoreClass(submission.score)">
-               {{ submission.score != null ? submission.score : '-' }}
+             <span :class="submission.status === 'Submitted' ? '' : getScoreClass(submission.score)">
+               {{ submission.status === 'Submitted' ? '-' : (submission.score != null ? submission.score : '-') }}
              </span>
           </el-descriptions-item>
           <el-descriptions-item label="提交时间" label-align="center" align="center">
@@ -111,6 +111,7 @@ const statusMap = {
   'Pending': { label: '等待中', type: 'info' },
   'Judging': { label: '评测中', type: 'primary' },
   'Accepted': { label: '通过', type: 'success' },
+  'Submitted': { label: '已提交', type: 'info' },
   'Wrong Answer': { label: '答案错误', type: 'danger' },
   'Time Limit Exceeded': { label: '超时', type: 'warning' },
   'Memory Limit Exceeded': { label: '内存超限', type: 'warning' },

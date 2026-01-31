@@ -47,14 +47,14 @@
           </el-select>
         </el-form-item>
 
-        <el-form-item label="允许参赛用户（可选）" prop="allowed_users">
+        <el-form-item label="允许参赛用户" prop="allowed_users">
           <el-select
             v-model="form.allowed_users"
             multiple
             filterable
             collapse-tags
             collapse-tags-tooltip
-            placeholder="为空表示所有用户可参与"
+            placeholder="请选择参赛用户"
           >
             <el-option
               v-for="user in userOptions"
@@ -65,7 +65,7 @@
           </el-select>
         </el-form-item>
 
-        <el-form-item label="允许参赛分组（可选）" prop="allowed_groups">
+        <el-form-item label="允许参赛分组" prop="allowed_groups">
           <el-select
             v-model="form.allowed_groups"
             multiple
@@ -74,7 +74,7 @@
             default-first-option
             collapse-tags
             collapse-tags-tooltip
-            placeholder="为空表示所有用户可参与"
+            placeholder="请选择参赛分组"
           >
             <el-option
               v-for="group in groupOptions"
@@ -176,6 +176,11 @@ async function fetchContest() {
 async function handleSubmit() {
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return
+
+  if (form.allowed_users.length === 0 && form.allowed_groups.length === 0) {
+    message.warning('请至少选择一个参赛用户或分组')
+    return
+  }
 
   saving.value = true
   try {

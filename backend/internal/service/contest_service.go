@@ -36,6 +36,12 @@ func (s *ContestService) Create(req *model.ContestCreateRequest, createdBy uint)
 		return nil, err
 	}
 
+	allowedUsers := uniqueUintList(req.AllowedUsers)
+	allowedGroups := uniqueStringList(req.AllowedGroups)
+	if len(allowedUsers) == 0 && len(allowedGroups) == 0 {
+		return nil, errors.New("请至少选择一个参赛用户或分组")
+	}
+
 	contest := &model.Contest{
 		Title:         strings.TrimSpace(req.Title),
 		Description:   strings.TrimSpace(req.Description),
@@ -43,8 +49,8 @@ func (s *ContestService) Create(req *model.ContestCreateRequest, createdBy uint)
 		StartAt:       req.StartAt,
 		EndAt:         req.EndAt,
 		ProblemIDs:    model.UintList(problemIDs),
-		AllowedUsers:  model.UintList(uniqueUintList(req.AllowedUsers)),
-		AllowedGroups: model.StringList(uniqueStringList(req.AllowedGroups)),
+		AllowedUsers:  model.UintList(allowedUsers),
+		AllowedGroups: model.StringList(allowedGroups),
 		CreatedBy:     createdBy,
 	}
 
@@ -70,14 +76,20 @@ func (s *ContestService) Update(id uint, req *model.ContestUpdateRequest) (*mode
 		return nil, err
 	}
 
+	allowedUsers := uniqueUintList(req.AllowedUsers)
+	allowedGroups := uniqueStringList(req.AllowedGroups)
+	if len(allowedUsers) == 0 && len(allowedGroups) == 0 {
+		return nil, errors.New("请至少选择一个参赛用户或分组")
+	}
+
 	contest.Title = strings.TrimSpace(req.Title)
 	contest.Description = strings.TrimSpace(req.Description)
 	contest.Type = strings.ToLower(strings.TrimSpace(req.Type))
 	contest.StartAt = req.StartAt
 	contest.EndAt = req.EndAt
 	contest.ProblemIDs = model.UintList(problemIDs)
-	contest.AllowedUsers = model.UintList(uniqueUintList(req.AllowedUsers))
-	contest.AllowedGroups = model.StringList(uniqueStringList(req.AllowedGroups))
+	contest.AllowedUsers = model.UintList(allowedUsers)
+	contest.AllowedGroups = model.StringList(allowedGroups)
 
 	if err := s.contestRepo.Update(contest); err != nil {
 		return nil, errors.New("更新比赛失败")
@@ -177,8 +189,6 @@ func (s *ContestService) GetLeaderboard(contestID uint) (*model.Contest, []uint,
 		return nil, nil, nil, errors.New("获取提交记录失败")
 	}
 
-	allowedAll := len(contest.AllowedUsers) == 0 && len(contest.AllowedGroups) == 0
-
 	type userEntry struct {
 		userID   uint
 		username string
@@ -188,7 +198,7 @@ func (s *ContestService) GetLeaderboard(contestID uint) (*model.Contest, []uint,
 
 	userMap := make(map[uint]*userEntry)
 	for _, sub := range submissions {
-		if !allowedAll && !canAccessContest(contest, sub.UserID, sub.Group) {
+		if !canAccessContest(contest, sub.UserID, sub.Group) {
 			continue
 		}
 
@@ -273,7 +283,7 @@ func canAccessContest(contest *model.Contest, userID uint, group string) bool {
 	allowedGroups := []string(contest.AllowedGroups)
 
 	if len(allowedUsers) == 0 && len(allowedGroups) == 0 {
-		return true
+		return false
 	}
 	if containsUint(allowedUsers, userID) {
 		return true

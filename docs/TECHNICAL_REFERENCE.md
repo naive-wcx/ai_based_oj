@@ -1120,6 +1120,9 @@ type Claims struct {
 }
 ```
 
+**说明**:
+- `allowed_users` 与 `allowed_groups` 至少填写一个，否则普通用户无法看到/参加比赛。
+
 #### PUT `/contests/:id` - 更新比赛
 
 **认证**: 需要 Bearer Token + 管理员权限
