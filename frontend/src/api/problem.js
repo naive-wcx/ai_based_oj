@@ -33,6 +33,13 @@ export const problemApi = {
     })
   },
 
+  // 批量上传测试用例（Zip）
+  uploadTestcaseZip(id, formData) {
+    return request.post(`/problem/${id}/testcase/zip`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
+
   // 获取测试用例列表（管理员）
   getTestcases(id) {
     return request.get(`/problem/${id}/testcases`)

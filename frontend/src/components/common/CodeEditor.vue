@@ -51,6 +51,10 @@ const props = defineProps({
     type: Number,
     default: 4,
   },
+  fontSize: {
+    type: Number,
+    default: 14,
+  },
 })
 
 const emit = defineEmits(['update:modelValue'])
@@ -63,6 +67,9 @@ const updateEditorOptions = () => {
     editor.value.getModel().updateOptions({
       tabSize: props.tabSize,
       insertSpaces: true,
+    })
+    editor.value.updateOptions({
+      fontSize: props.fontSize,
     })
   }
 }
@@ -78,7 +85,7 @@ onMounted(() => {
       minimap: {
         enabled: !props.readonly, // Disable minimap in readonly mode for a cleaner look
       },
-      fontSize: 14,
+      fontSize: props.fontSize,
       fontFamily: "'Fira Code', 'Monaco', monospace",
       lineHeight: 21, // Adjust line height for a more compact feel
       scrollBeyondLastLine: false,
@@ -128,6 +135,9 @@ watch(
 
 // Watch for tabSize prop changes
 watch(() => props.tabSize, updateEditorOptions)
+
+// Watch for fontSize prop changes
+watch(() => props.fontSize, updateEditorOptions)
 
 onBeforeUnmount(() => {
   if (editor.value) {

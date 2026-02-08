@@ -139,7 +139,31 @@ func (r *ProblemRepository) IncrementSubmitCount(problemID uint) error {
 // IncrementAcceptedCount 增加题目通过数
 func (r *ProblemRepository) IncrementAcceptedCount(problemID uint) error {
 	return r.db.Model(&model.Problem{}).Where("id = ?", problemID).
-		UpdateColumn("accepted_count", gorm.Expr("accepted_count + 1")).Error
+		UpdateColumn("accepted_count", gorm.Expr("accepted_count + ?", 1)).Error
+}
+
+// SyncStats 重新计算并同步题目的统计数据（提交数、通过数）
+func (r *ProblemRepository) SyncStats(problemID uint) error {
+	var accepted int64
+	// 统计通过的提交数量
+	if err := r.db.Model(&model.Submission{}).
+		Where("problem_id = ? AND status = ?", problemID, model.StatusAccepted).
+		Count(&accepted).Error; err != nil {
+		return err
+	}
+
+	var submitted int64
+	// 统计总提交数量
+	if err := r.db.Model(&model.Submission{}).
+		Where("problem_id = ?", problemID).
+		Count(&submitted).Error; err != nil {
+		return err
+	}
+
+	return r.db.Model(&model.Problem{}).Where("id = ?", problemID).Updates(map[string]interface{}{
+		"accepted_count": int(accepted),
+		"submit_count":   int(submitted),
+	}).Error
 }
 
 // CountPublic 获取公开题目数量

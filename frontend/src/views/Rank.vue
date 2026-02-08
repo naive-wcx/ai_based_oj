@@ -1,50 +1,63 @@
 <template>
-  <el-card shadow="never" class="page-container">
-    <template #header>
-      <div class="page-header">
-        <span class="page-title">🏆 排行榜</span>
-      </div>
-    </template>
+  <div class="swiss-layout">
+    <div class="swiss-header">
+      <h1 class="swiss-title">排行榜</h1>
+    </div>
     
-    <el-table :data="users" v-loading="loading" stripe style="width: 100%">
+    <el-table 
+      :data="users" 
+      v-loading="loading" 
+      class="swiss-table"
+    >
       <el-table-column label="排名" width="100" align="center">
         <template #default="{ $index }">
-          <span :class="['rank', getRankClass((pagination.page - 1) * pagination.size + $index + 1)]">
+          <span :class="['rank-number', getRankClass((pagination.page - 1) * pagination.size + $index + 1)]">
             {{ (pagination.page - 1) * pagination.size + $index + 1 }}
           </span>
         </template>
       </el-table-column>
+
       <el-table-column prop="username" label="用户" min-width="200">
         <template #default="{ row }">
           <div class="user-cell">
-            <el-avatar :size="32" :src="row.avatar">{{ row.username[0]?.toUpperCase() }}</el-avatar>
+            <span class="user-avatar">{{ row.username[0]?.toUpperCase() }}</span>
             <span class="username">{{ row.username }}</span>
-            <el-tag v-if="row.role === 'admin'" size="small" type="danger" effect="dark">管理员</el-tag>
+            <span v-if="row.role === 'admin'" class="badge admin">ADMIN</span>
           </div>
         </template>
       </el-table-column>
-      <el-table-column prop="solved_count" label="解题数" width="150" sortable align="center" />
-      <el-table-column prop="submit_count" label="提交数" width="150" sortable align="center" />
-      <el-table-column label="通过率" width="150" align="center">
+
+      <el-table-column prop="solved_count" label="解题数" width="150" align="right">
         <template #default="{ row }">
-          <span class="accept-rate">{{ getAcceptRate(row) }}</span>
+          <span class="stat-value primary swiss-font-mono">{{ row.solved_count }}</span>
+        </template>
+      </el-table-column>
+
+      <el-table-column prop="submit_count" label="提交数" width="150" align="right">
+        <template #default="{ row }">
+          <span class="stat-value secondary swiss-font-mono">{{ row.submit_count }}</span>
+        </template>
+      </el-table-column>
+
+      <el-table-column label="通过率" width="150" align="right">
+        <template #default="{ row }">
+          <span class="stat-value swiss-font-mono">{{ getAcceptRate(row) }}</span>
         </template>
       </el-table-column>
     </el-table>
     
-    <div class="pagination-container" v-if="pagination.total > 0">
+    <div class="swiss-pagination" v-if="pagination.total > 0">
       <el-pagination
         v-model:current-page="pagination.page"
         v-model:page-size="pagination.size"
         :total="pagination.total"
         :page-sizes="[50, 100, 200]"
-        layout="total, sizes, prev, pager, next, jumper"
-        background
+        layout="prev, pager, next"
         @size-change="fetchRank"
         @current-change="fetchRank"
       />
     </div>
-  </el-card>
+  </div>
 </template>
 
 <script setup>
@@ -68,8 +81,9 @@ function getRankClass(rank) {
 }
 
 function getAcceptRate(row) {
-  if (!row.submit_count) return 'N/A'
-  const rate = (row.solved_count / row.submit_count * 100).toFixed(1)
+  if (!row.submit_count) return '-'
+  const accepted = row.accepted_count !== undefined ? row.accepted_count : row.solved_count
+  const rate = (accepted / row.submit_count * 100).toFixed(1)
   return `${rate}%`
 }
 
@@ -95,66 +109,59 @@ onMounted(() => {
 </script>
 
 <style lang="scss" scoped>
-.page-container {
-  border: none;
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.page-title {
-  font-size: 22px;
-  font-weight: 600;
-  color: #303133;
-}
-
-.rank {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  font-weight: 600;
+.rank-number {
+  font-family: var(--font-family-mono);
+  font-weight: 500;
   font-size: 14px;
+  color: var(--color-text-secondary);
   
-  &.rank-1 {
-    background: linear-gradient(135deg, #ffd700, #ffb347);
-    color: white;
-    box-shadow: 0 0 8px rgba(255, 215, 0, 0.6);
-  }
-  
-  &.rank-2 {
-    background: linear-gradient(135deg, #c0c0c0, #a8a8a8);
-    color: white;
-  }
-  
-  &.rank-3 {
-    background: linear-gradient(135deg, #cd7f32, #b87333);
-    color: white;
-  }
+  &.rank-1 { color: #D97706; font-weight: 700; } /* Gold */
+  &.rank-2 { color: #4B5563; font-weight: 700; } /* Silver */
+  &.rank-3 { color: #B45309; font-weight: 700; } /* Bronze */
 }
 
 .user-cell {
   display: flex;
   align-items: center;
   gap: 12px;
-  .username {
-    font-weight: 500;
+}
+
+.user-avatar {
+  width: 28px;
+  height: 28px;
+  background: #F3F4F6;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.username {
+  font-weight: 500;
+  color: var(--color-text-primary);
+  font-size: 14px;
+}
+
+.badge {
+  font-size: 9px;
+  padding: 1px 4px;
+  border-radius: 2px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  
+  &.admin {
+    background: #FEE2E2;
+    color: #DC2626;
   }
 }
 
-.accept-rate {
-  font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB',
-    'Microsoft YaHei', '微软雅黑', Arial, sans-serif;
-}
-
-.pagination-container {
-  margin-top: 24px;
-  display: flex;
-  justify-content: flex-end;
+.stat-value {
+  font-size: 14px;
+  
+  &.primary { color: var(--color-text-primary); font-weight: 600; }
+  &.secondary { color: var(--color-text-secondary); }
 }
 </style>

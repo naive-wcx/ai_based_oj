@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"os"
 
 	"github.com/gin-gonic/gin"
 	"oj-system/internal/middleware"
@@ -176,6 +177,46 @@ func (h *ProblemHandler) UploadTestcase(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, model.SuccessMessage("上传成功", nil))
+}
+
+// UploadTestcaseZip 批量上传测试用例 (Zip)
+// POST /api/v1/problem/:id/testcase/zip
+func (h *ProblemHandler) UploadTestcaseZip(c *gin.Context) {
+	id := getUintParam(c, "id")
+	if id == 0 {
+		c.JSON(http.StatusBadRequest, model.BadRequest("题目 ID 无效"))
+		return
+	}
+
+	// 获取上传的文件
+	file, err := c.FormFile("zip_file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, model.BadRequest("请上传 zip 文件"))
+		return
+	}
+
+	// 保存到临时文件
+	tmpFile, err := os.CreateTemp("", "testcase-*.zip")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, model.ServerError("创建临时文件失败"))
+		return
+	}
+	tmpPath := tmpFile.Name()
+	tmpFile.Close()
+	defer os.Remove(tmpPath)
+
+	if err := c.SaveUploadedFile(file, tmpPath); err != nil {
+		c.JSON(http.StatusInternalServerError, model.ServerError("保存文件失败"))
+		return
+	}
+
+	// 处理 Zip
+	if err := h.service.UploadTestcaseZip(id, tmpPath); err != nil {
+		c.JSON(http.StatusBadRequest, model.BadRequest(err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, model.SuccessMessage("批量上传并处理成功", nil))
 }
 
 // GetTestcases 获取测试用例列表（管理员）

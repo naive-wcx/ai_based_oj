@@ -1,99 +1,101 @@
 <template>
-  <el-card shadow="never" class="page-container">
-    <template #header>
-      <div class="page-header">
-        <span class="page-title">题目列表</span>
-        <div class="filter-bar">
-          <el-input
-            v-model="filters.keyword"
-            placeholder="搜索题目 ID 或标题"
-            clearable
-            style="width: 240px"
-            @keyup.enter="handleSearch"
-          >
-            <template #prefix>
-              <el-icon><Search /></el-icon>
-            </template>
-          </el-input>
+  <div class="swiss-layout">
+    <div class="swiss-header">
+      <h1 class="swiss-title">题目列表</h1>
+      <div class="filter-group">
+        <el-input
+          v-model="filters.keyword"
+          placeholder="搜索题目..."
+          style="width: 200px"
+          @keyup.enter="handleSearch"
+        >
+          <template #prefix>
+            <el-icon><Search /></el-icon>
+          </template>
+        </el-input>
 
-          <el-select
-            v-model="filters.difficulty"
-            placeholder="难度"
-            clearable
-            style="width: 120px"
-            @change="handleSearch"
-          >
-            <el-option label="简单" value="easy" />
-            <el-option label="中等" value="medium" />
-            <el-option label="困难" value="hard" />
-          </el-select>
-        </div>
+        <el-select
+          v-model="filters.difficulty"
+          placeholder="难度"
+          clearable
+          style="width: 120px"
+          @change="handleSearch"
+        >
+          <el-option label="简单" value="easy" />
+          <el-option label="中等" value="medium" />
+          <el-option label="困难" value="hard" />
+        </el-select>
       </div>
-    </template>
+    </div>
 
-    <el-table :data="problems" v-loading="loading" stripe style="width: 100%">
-      <el-table-column prop="id" label="#" width="80" />
-      <el-table-column label="题目" min-width="300">
+    <el-table 
+      :data="problems" 
+      v-loading="loading" 
+      class="swiss-table"
+    >
+      <el-table-column prop="id" label="#" width="80" align="center">
         <template #default="{ row }">
-          <router-link :to="`/problem/${row.id}`" class="problem-title">
-            <span>{{ row.title }}</span>
-            <span v-if="row.has_ai_judge" class="ai-badge">AI</span>
-            <span v-if="row.has_file_io" class="file-io-badge">文件IO</span>
-            <el-tag
-              v-if="row.has_accepted"
-              type="success"
-              size="small"
-              disable-transitions
-              >已通过</el-tag
-            >
+          <span class="swiss-font-mono" style="color: var(--color-text-secondary)">{{ row.id }}</span>
+        </template>
+      </el-table-column>
+      
+      <el-table-column label="状态" width="60" align="center">
+        <template #default="{ row }">
+          <el-icon v-if="row.has_accepted" style="color: var(--color-success); font-size: 16px;"><Check /></el-icon>
+        </template>
+      </el-table-column>
+
+      <el-table-column label="标题" min-width="400">
+        <template #default="{ row }">
+          <router-link :to="`/problem/${row.id}`" class="problem-link">
+            {{ row.title }}
+            <span v-if="row.has_ai_judge" class="indicator ai" title="AI 判题已启用">AI</span>
+            <span v-if="row.has_file_io" class="indicator file" title="文件 IO">FILE</span>
           </router-link>
         </template>
       </el-table-column>
+
       <el-table-column label="标签" min-width="200">
         <template #default="{ row }">
-          <el-tag
-            v-for="tag in (row.tags || []).slice(0, 3)"
-            :key="tag"
-            size="small"
-            effect="plain"
-            class="problem-tag"
-          >
-            {{ tag }}
-          </el-tag>
+          <div class="tags-wrapper">
+            <span v-for="tag in (row.tags || []).slice(0, 3)" :key="tag" class="minimal-tag">
+              {{ tag }}
+            </span>
+          </div>
         </template>
       </el-table-column>
-      <el-table-column label="通过率" width="120" align="center">
+
+      <el-table-column label="通过率" width="120" align="right">
         <template #default="{ row }">
-          <span class="accept-rate">{{ getAcceptRate(row) }}</span>
+          <span class="swiss-font-mono" style="font-size: 13px;">{{ getAcceptRate(row) }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="难度" width="100" align="center">
+
+      <el-table-column label="难度" width="100" align="right">
         <template #default="{ row }">
-          <el-tag :type="getDifficultyTag(row.difficulty).type" size="small">{{
-            getDifficultyTag(row.difficulty).label
-          }}</el-tag>
+          <span :class="['difficulty-dot', row.difficulty]"></span>
+          <span style="font-size: 13px; color: var(--color-text-secondary);">{{ formatDifficulty(row.difficulty) }}</span>
         </template>
       </el-table-column>
     </el-table>
 
-    <div class="pagination-container" v-if="pagination.total > 0">
+    <div class="swiss-pagination" v-if="pagination.total > 0">
       <el-pagination
         v-model:current-page="pagination.page"
         v-model:page-size="pagination.size"
         :total="pagination.total"
         :page-sizes="[20, 50, 100]"
-        layout="total, sizes, prev, pager, next, jumper"
-        background
+        layout="prev, pager, next"
         @size-change="fetchProblems"
         @current-change="fetchProblems"
       />
     </div>
-  </el-card>
+  </div>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import { Search } from '@element-plus/icons-vue'
+import { Search, Check } from '@element-plus/icons-vue'
 import { problemApi } from '@/api/problem'
 import { message } from '@/utils/message'
 import { useRouter, useRoute } from 'vue-router'
@@ -115,13 +117,9 @@ const pagination = reactive({
   total: 0,
 })
 
-const getDifficultyTag = (difficulty) => {
-  const settings = {
-    easy: { type: 'success', label: '简单' },
-    medium: { type: 'warning', label: '中等' },
-    hard: { type: 'danger', label: '困难' },
-  }
-  return settings[difficulty] || { type: 'info', label: difficulty }
+const formatDifficulty = (val) => {
+  const map = { easy: '简单', medium: '中等', hard: '困难' }
+  return map[val] || val
 }
 
 const updateUrl = () => {
@@ -151,7 +149,7 @@ async function fetchProblems() {
     pagination.total = res.data.total
     updateUrl()
   } catch (e) {
-    message.error('题目列表加载失败')
+    message.error('加载题目失败')
     console.error(e)
   } finally {
     loading.value = false
@@ -164,7 +162,7 @@ const handleSearch = () => {
 }
 
 function getAcceptRate(row) {
-  if (!row.submit_count) return 'N/A'
+  if (!row.submit_count) return '-'
   const rate = ((row.accepted_count / row.submit_count) * 100).toFixed(1)
   return `${rate}%`
 }
@@ -175,81 +173,67 @@ onMounted(() => {
 </script>
 
 <style lang="scss" scoped>
-.page-container {
-  border: none;
-}
-
-.page-header {
+.filter-group {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 16px;
+  gap: 24px;
 }
 
-.page-title {
-  font-size: 22px;
-  font-weight: 600;
-  color: #303133;
-}
-
-.filter-bar {
+.problem-link {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--color-text-primary);
   display: flex;
-  gap: 12px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.problem-title {
-  display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: var(--el-text-color-primary);
-  text-decoration: none;
-  font-weight: 500;
-
+  
   &:hover {
-    color: var(--el-color-primary);
+    color: var(--color-primary);
   }
 }
 
-.ai-badge {
-  display: inline-block;
-  padding: 0 6px;
-  font-size: 12px;
-  font-weight: bold;
-  line-height: 18px;
-  border-radius: 4px;
-  color: #fff;
-  background-color: #409eff;
-  border: 1px solid #409eff;
+.indicator {
+  font-size: 9px;
+  padding: 1px 4px;
+  border-radius: 2px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  
+  &.ai {
+    background: #EEF2FF;
+    color: #4338CA;
+  }
+  
+  &.file {
+    background: #FEF3C7;
+    color: #D97706;
+  }
 }
 
-.file-io-badge {
-  display: inline-block;
-  padding: 0 6px;
-  font-size: 12px;
-  font-weight: bold;
-  line-height: 18px;
-  border-radius: 4px;
-  color: #fff;
-  background-color: #e67e22;
-  border: 1px solid #e67e22;
-}
-
-.problem-tag {
-  margin-right: 4px;
-}
-
-.accept-rate {
-  color: var(--el-text-color-secondary);
-  font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB',
-    'Microsoft YaHei', '微软雅黑', Arial, sans-serif;
-}
-
-.pagination-container {
-  margin-top: 24px;
+.tags-wrapper {
   display: flex;
-  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.minimal-tag {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  background: rgba(0,0,0,0.04);
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+.difficulty-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 8px;
+  vertical-align: middle;
+  
+  &.easy { background-color: var(--color-success); }
+  &.medium { background-color: var(--color-warning); }
+  &.hard { background-color: var(--color-danger); }
 }
 </style>

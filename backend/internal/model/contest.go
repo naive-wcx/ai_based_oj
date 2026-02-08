@@ -17,6 +17,7 @@ type Contest struct {
 	ProblemIDs     UintList   `json:"problem_ids" gorm:"type:text"`
 	AllowedUsers   UintList   `json:"allowed_users" gorm:"type:text"`
 	AllowedGroups  StringList `json:"allowed_groups" gorm:"type:text"`
+	IsStatsSynced  bool       `json:"is_stats_synced" gorm:"default:false"`
 	CreatedBy      uint       `json:"created_by"`
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`

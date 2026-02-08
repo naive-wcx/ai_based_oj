@@ -75,7 +75,47 @@ func (r *UserRepository) IncrementSolvedCount(userID uint) error {
 // IncrementSubmitCount 增加用户提交数
 func (r *UserRepository) IncrementSubmitCount(userID uint) error {
 	return r.db.Model(&model.User{}).Where("id = ?", userID).
-		UpdateColumn("submit_count", gorm.Expr("submit_count + 1")).Error
+		UpdateColumn("submit_count", gorm.Expr("submit_count + ?", 1)).Error
+}
+
+// IncrementAcceptedCount 增加用户通过的提交数
+func (r *UserRepository) IncrementAcceptedCount(userID uint) error {
+	return r.db.Model(&model.User{}).Where("id = ?", userID).
+		UpdateColumn("accepted_count", gorm.Expr("accepted_count + ?", 1)).Error
+}
+
+// SyncStats 重新计算并同步用户的统计数据（解题数、提交数、通过提交数）
+func (r *UserRepository) SyncStats(userID uint) error {
+	var solved int64
+	// 统计通过的题目数量（去重）
+	if err := r.db.Model(&model.Submission{}).
+		Where("user_id = ? AND status = ?", userID, model.StatusAccepted).
+		Distinct("problem_id").
+		Count(&solved).Error; err != nil {
+		return err
+	}
+
+	var accepted int64
+	// 统计通过的提交总数
+	if err := r.db.Model(&model.Submission{}).
+		Where("user_id = ? AND status = ?", userID, model.StatusAccepted).
+		Count(&accepted).Error; err != nil {
+		return err
+	}
+
+	var submitted int64
+	// 统计总提交数
+	if err := r.db.Model(&model.Submission{}).
+		Where("user_id = ?", userID).
+		Count(&submitted).Error; err != nil {
+		return err
+	}
+
+	return r.db.Model(&model.User{}).Where("id = ?", userID).Updates(map[string]interface{}{
+		"solved_count":   int(solved),
+		"accepted_count": int(accepted),
+		"submit_count":   int(submitted),
+	}).Error
 }
 
 // ExistsByUsername 检查用户名是否存在

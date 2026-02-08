@@ -244,6 +244,60 @@ func (s *ContestService) GetLeaderboard(contestID uint) (*model.Contest, []uint,
 	return contest, problemIDs, entries, nil
 }
 
+// RefreshStats 刷新比赛相关的统计数据
+func (s *ContestService) RefreshStats(contestID uint) error {
+	// 1. 获取比赛信息
+	contest, err := s.contestRepo.GetByID(contestID)
+	if err != nil {
+		return errors.New("比赛不存在")
+	}
+
+	// 2. 刷新题目统计
+	problemIDs := []uint(contest.ProblemIDs)
+	for _, pid := range problemIDs {
+		if err := s.problemRepo.SyncStats(pid); err != nil {
+			// 记录错误但继续
+		}
+	}
+
+	// 3. 刷新用户统计
+	// 获取该比赛期间的所有提交记录，提取用户 ID
+	submissions, err := s.submissionRepo.ListForContest(problemIDs, contest.StartAt, contest.EndAt)
+	if err != nil {
+		return errors.New("获取提交记录失败")
+	}
+
+	userSet := make(map[uint]struct{})
+	for _, sub := range submissions {
+		userSet[sub.UserID] = struct{}{}
+	}
+
+	for uid := range userSet {
+		if err := s.userRepo.SyncStats(uid); err != nil {
+			// 记录错误但继续
+		}
+	}
+
+	return nil
+}
+
+// SyncEndedContests 同步已结束比赛的统计数据（供定时任务调用）
+func (s *ContestService) SyncEndedContests() {
+	contests, err := s.contestRepo.GetPendingSyncContests()
+	if err != nil {
+		// 日志记录错误? 目前没有统一的日志服务，暂时忽略
+		return
+	}
+
+	for _, contest := range contests {
+		// 复用 RefreshStats 逻辑
+		if err := s.RefreshStats(contest.ID); err == nil {
+			// 只有同步成功才标记
+			s.contestRepo.MarkStatsSynced(contest.ID)
+		}
+	}
+}
+
 func (s *ContestService) validateProblemIDs(ids []uint) error {
 	if len(ids) == 0 {
 		return nil

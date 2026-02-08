@@ -226,52 +226,88 @@
     <div class="card" v-if="isEdit">
       <h3>测试数据管理</h3>
       
-      <div class="testcase-upload">
-        <el-upload
-          ref="inputUploadRef"
-          action=""
-          :auto-upload="false"
-          :limit="1"
-          :on-change="handleInputChange"
-          :on-remove="() => inputFile = null"
-          accept=".in,.txt"
-        >
-          <template #trigger>
-            <el-button>选择输入文件 (.in)</el-button>
-          </template>
-          <template #tip>
-            <div class="el-upload__tip" v-if="inputFile">
-              已选择: {{ inputFile.name }}
+      <el-tabs type="border-card" class="testcase-tabs">
+        <el-tab-pane label="逐个上传">
+          <div class="upload-panel">
+            <el-upload
+              ref="inputUploadRef"
+              action=""
+              :auto-upload="false"
+              :limit="1"
+              :on-change="handleInputChange"
+              :on-remove="() => inputFile = null"
+              accept=".in,.txt"
+              class="upload-item"
+            >
+              <template #trigger>
+                <el-button icon="Document">选择输入 (.in)</el-button>
+              </template>
+              <div class="el-upload__tip" v-if="inputFile">已选: {{ inputFile.name }}</div>
+            </el-upload>
+            
+            <el-upload
+              ref="outputUploadRef"
+              action=""
+              :auto-upload="false"
+              :limit="1"
+              :on-change="handleOutputChange"
+              :on-remove="() => outputFile = null"
+              accept=".out,.txt"
+              class="upload-item"
+            >
+              <template #trigger>
+                <el-button icon="Document">选择输出 (.out)</el-button>
+              </template>
+              <div class="el-upload__tip" v-if="outputFile">已选: {{ outputFile.name }}</div>
+            </el-upload>
+            
+            <div class="score-input">
+              <span class="label">分值:</span>
+              <el-input-number v-model="testcaseScore" :min="1" :max="100" style="width: 140px" />
             </div>
-          </template>
-        </el-upload>
-        
-        <el-upload
-          ref="outputUploadRef"
-          action=""
-          :auto-upload="false"
-          :limit="1"
-          :on-change="handleOutputChange"
-          :on-remove="() => outputFile = null"
-          accept=".out,.txt"
-        >
-          <template #trigger>
-            <el-button>选择输出文件 (.out)</el-button>
-          </template>
-          <template #tip>
-            <div class="el-upload__tip" v-if="outputFile">
-              已选择: {{ outputFile.name }}
-            </div>
-          </template>
-        </el-upload>
-        
-        <el-input-number v-model="testcaseScore" :min="1" :max="100" placeholder="分数" style="width: 100px" />
-        <span class="unit">分</span>
-        
-        <el-button type="primary" @click="uploadTestcase" :loading="uploadingTestcase">
-          上传测试点
-        </el-button>
-      </div>
+            
+            <el-button type="primary" @click="uploadTestcase" :loading="uploadingTestcase">
+              上传测试点
+            </el-button>
+          </div>
+        </el-tab-pane>
+
+        <el-tab-pane label="批量上传 (Zip)">
+          <div class="upload-panel">
+            <el-upload
+              ref="zipUploadRef"
+              action=""
+              :auto-upload="false"
+              :limit="1"
+              :on-change="handleZipChange"
+              :on-remove="() => zipFile = null"
+              accept=".zip"
+              class="upload-item"
+            >
+              <template #trigger>
+                <el-button type="warning" plain icon="Folder">选择 Zip 包</el-button>
+              </template>
+              <div class="el-upload__tip" v-if="zipFile">已选: {{ zipFile.name }}</div>
+            </el-upload>
+            
+            <el-button type="warning" @click="uploadZip" :loading="uploadingZip" :disabled="!zipFile">
+              一键批量上传
+            </el-button>
+          </div>
+          <el-alert
+            title="注意：批量上传将自动覆盖所有现有测试点"
+            type="warning"
+            :closable="false"
+            show-icon
+            style="margin-top: 16px"
+          >
+            <template #default>
+              <div>1. 系统会自动识别 Zip 包内的 .in 和 .out/.ans 文件并配对。</div>
+              <div>2. 测试点分数将自动均分（例如 10 个测试点，每个 10 分）。</div>
+            </template>
+          </el-alert>
+        </el-tab-pane>
+      </el-tabs>
       
       <el-table :data="testcases" v-loading="loadingTestcases" stripe style="margin-top: 16px">
         <el-table-column prop="order_num" label="序号" width="80" />
@@ -307,6 +343,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { message } from '@/utils/message'
 import { problemApi } from '@/api/problem'
 import MarkdownPreview from '@/components/common/MarkdownPreview.vue'
+import { Document, Folder } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -361,6 +398,12 @@ const outputFile = ref(null)
 const testcaseScore = ref(10)
 const inputUploadRef = ref()
 const outputUploadRef = ref()
+const activeTab = ref('0') // 默认第一个 tab (Element Plus tabs don't need v-model strictly if not controlled, but good practice)
+
+// Zip 上传
+const zipFile = ref(null)
+const uploadingZip = ref(false)
+const zipUploadRef = ref()
 
 function handleInputChange(file) {
   inputFile.value = file.raw
@@ -368,6 +411,10 @@ function handleInputChange(file) {
 
 function handleOutputChange(file) {
   outputFile.value = file.raw
+}
+
+function handleZipChange(file) {
+  zipFile.value = file.raw
 }
 
 function addSample() {
@@ -499,6 +546,27 @@ async function uploadTestcase() {
   }
 }
 
+async function uploadZip() {
+  if (!zipFile.value) return
+  
+  const formData = new FormData()
+  formData.append('zip_file', zipFile.value)
+  
+  uploadingZip.value = true
+  try {
+    await problemApi.uploadTestcaseZip(route.params.id, formData)
+    message.success('批量上传成功')
+    
+    zipFile.value = null
+    zipUploadRef.value?.clearFiles()
+    fetchTestcases()
+  } catch (e) {
+    console.error(e)
+  } finally {
+    uploadingZip.value = false
+  }
+}
+
 async function deleteAllTestcases() {
   try {
     await problemApi.deleteTestcases(route.params.id)
@@ -597,11 +665,28 @@ onMounted(() => {
   margin-bottom: 16px;
 }
 
-.testcase-upload {
+.upload-panel {
   display: flex;
-  gap: 12px;
-  align-items: flex-start;
+  align-items: center;
+  gap: 16px;
   flex-wrap: wrap;
+  padding: 12px 0;
+}
+
+.upload-item {
+  display: inline-flex;
+  flex-direction: column;
+}
+
+.score-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  
+  .label {
+    font-size: 14px;
+    color: #606266;
+  }
 }
 
 .file-path {

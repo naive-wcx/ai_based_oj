@@ -56,6 +56,7 @@ func SetupRouter(mode string) *gin.Engine {
 			problem.PUT("/:id", middleware.AuthMiddleware(), middleware.AdminMiddleware(), problemHandler.Update)
 			problem.DELETE("/:id", middleware.AuthMiddleware(), middleware.AdminMiddleware(), problemHandler.Delete)
 			problem.POST("/:id/testcase", middleware.AuthMiddleware(), middleware.AdminMiddleware(), problemHandler.UploadTestcase)
+			problem.POST("/:id/testcase/zip", middleware.AuthMiddleware(), middleware.AdminMiddleware(), problemHandler.UploadTestcaseZip)
 			problem.GET("/:id/testcases", middleware.AuthMiddleware(), middleware.AdminMiddleware(), problemHandler.GetTestcases)
 			problem.DELETE("/:id/testcases", middleware.AuthMiddleware(), middleware.AdminMiddleware(), problemHandler.DeleteTestcases)
 		}
@@ -95,6 +96,7 @@ func SetupRouter(mode string) *gin.Engine {
 			admin.POST("/contests", contestHandler.Create)
 			admin.PUT("/contests/:id", contestHandler.Update)
 			admin.DELETE("/contests/:id", contestHandler.Delete)
+			admin.POST("/contests/:id/refresh", contestHandler.RefreshStats)
 			admin.GET("/contests/:id/leaderboard", contestHandler.GetLeaderboard)
 			admin.GET("/contests/:id/export", contestHandler.ExportLeaderboard)
 			

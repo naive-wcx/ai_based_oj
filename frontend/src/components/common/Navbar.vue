@@ -17,29 +17,22 @@
 
       <div class="navbar-actions">
         <template v-if="userStore.isLoggedIn">
-          <el-dropdown trigger="click">
+          <el-dropdown trigger="click" popper-class="minimal-dropdown">
             <span class="user-dropdown">
-              <el-avatar :size="32">{{ userStore.username[0]?.toUpperCase() }}</el-avatar>
               <span class="username">{{ userStore.username }}</span>
-              <el-icon><ArrowDown /></el-icon>
+              <el-icon class="dropdown-icon"><ArrowDown /></el-icon>
             </span>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item @click="$router.push('/profile')">
-                  <el-icon><User /></el-icon> 个人中心
-                </el-dropdown-item>
-                <el-dropdown-item v-if="userStore.isAdmin" @click="$router.push('/admin')">
-                  <el-icon><Setting /></el-icon> 管理后台
-                </el-dropdown-item>
-                <el-dropdown-item divided @click="handleLogout">
-                  <el-icon><SwitchButton /></el-icon> 退出登录
-                </el-dropdown-item>
+                <el-dropdown-item @click="$router.push('/profile')">个人中心</el-dropdown-item>
+                <el-dropdown-item v-if="userStore.isAdmin" @click="$router.push('/admin')">管理后台</el-dropdown-item>
+                <el-dropdown-item divided @click="handleLogout">退出登录</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
         </template>
         <template v-else>
-          <el-button type="primary" plain @click="$router.push('/login')">登录</el-button>
+          <router-link to="/login" class="login-link">登录</router-link>
         </template>
       </div>
     </div>
@@ -50,7 +43,7 @@
 import { useUserStore } from '@/stores/user'
 import { useRouter } from 'vue-router'
 import { message } from '@/utils/message'
-import { ArrowDown, User, Setting, SwitchButton } from '@element-plus/icons-vue'
+import { ArrowDown } from '@element-plus/icons-vue'
 import logoUrl from '@/assets/logo.png'
 
 const userStore = useUserStore()
@@ -65,18 +58,21 @@ function handleLogout() {
 
 <style lang="scss" scoped>
 .navbar {
-  background: #fff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--color-border);
   position: sticky;
   top: 0;
   z-index: 100;
+  transition: all 0.3s ease;
 }
 
 .navbar-container {
-  max-width: 1400px;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 0 20px;
-  height: 60px;
+  height: 64px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -86,39 +82,47 @@ function handleLogout() {
   .logo {
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 22px;
-    font-weight: 800;
-    letter-spacing: 0.5px;
-    color: #1f2d3d;
+    gap: 12px;
     text-decoration: none;
     
     .logo-image {
-      width: 30px;
-      height: 30px;
+      width: 32px;
+      height: 32px;
       object-fit: contain;
     }
 
     .logo-text {
-      font-family: "Trebuchet MS", "Segoe UI", Arial, sans-serif;
+      font-family: var(--font-family-base);
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--color-text-primary);
+      letter-spacing: -0.01em;
     }
   }
 }
 
 .navbar-menu {
   display: flex;
-  gap: 32px;
+  gap: 40px;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
   
   .nav-link {
-    color: #606266;
+    color: var(--color-text-secondary);
     font-size: 15px;
     font-weight: 500;
     text-decoration: none;
     transition: color 0.2s;
+    letter-spacing: 0.02em;
     
-    &:hover,
+    &:hover {
+      color: var(--color-primary);
+    }
+    
     &.router-link-active {
-      color: #409eff;
+      color: var(--color-text-primary);
+      font-weight: 600;
     }
   }
 }
@@ -126,7 +130,6 @@ function handleLogout() {
 .navbar-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
 }
 
 .user-dropdown {
@@ -134,10 +137,41 @@ function handleLogout() {
   align-items: center;
   gap: 8px;
   cursor: pointer;
+  padding: 6px 12px;
+  border-radius: var(--radius-md);
+  transition: background 0.2s;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.03);
+  }
   
   .username {
     font-size: 14px;
-    color: #606266;
+    font-weight: 500;
+    color: var(--color-text-primary);
+  }
+  
+  .dropdown-icon {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+  }
+}
+
+.login-link {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-primary);
+  text-decoration: none;
+  
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+/* Responsive adjustment */
+@media (max-width: 768px) {
+  .navbar-menu {
+    display: none;
   }
 }
 </style>

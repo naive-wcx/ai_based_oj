@@ -13,8 +13,9 @@ type User struct {
 	StudentID    string    `json:"student_id" gorm:"size:50"`
 	Role         string    `json:"role" gorm:"size:20;default:user"` // user, admin
 	Group        string    `json:"group" gorm:"size:50"`
-	SolvedCount  int       `json:"solved_count" gorm:"default:0"`
-	SubmitCount  int       `json:"submit_count" gorm:"default:0"`
+	SolvedCount  int       `json:"solved_count" gorm:"default:0"`   // AC 的题目数量
+	AcceptedCount int      `json:"accepted_count" gorm:"default:0"` // AC 的提交总数
+	SubmitCount  int       `json:"submit_count" gorm:"default:0"`   // 总提交次数
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }
@@ -71,19 +72,21 @@ type UserInfo struct {
 	Role        string `json:"role"`
 	Group       string `json:"group"`
 	SolvedCount int    `json:"solved_count"`
+	AcceptedCount int  `json:"accepted_count"`
 	SubmitCount int    `json:"submit_count"`
 }
 
 // ToUserInfo 将 User 转换为 UserInfo
 func (u *User) ToUserInfo() *UserInfo {
 	return &UserInfo{
-		ID:          u.ID,
-		Username:    u.Username,
-		Email:       u.Email,
-		StudentID:   u.StudentID,
-		Role:        u.Role,
-		Group:       u.Group,
-		SolvedCount: u.SolvedCount,
-		SubmitCount: u.SubmitCount,
+		ID:            u.ID,
+		Username:      u.Username,
+		Email:         u.Email,
+		StudentID:     u.StudentID,
+		Role:          u.Role,
+		Group:         u.Group,
+		SolvedCount:   u.SolvedCount,
+		AcceptedCount: u.AcceptedCount,
+		SubmitCount:   u.SubmitCount,
 	}
 }

@@ -392,6 +392,7 @@ POST /api/v1/submission
 | DELETE | `/contests/:id` | 删除比赛 | 管理员 |
 | GET | `/contests/:id/leaderboard` | 比赛排行榜（管理员） | 管理员 |
 | GET | `/contests/:id/export` | 导出比赛成绩 | 管理员 |
+| POST | `/contests/:id/refresh` | 刷新比赛统计（赛后同步） | 管理员 |
 | GET | `/statistics` | 系统统计 | 管理员 |
 | POST | `/rejudge/:id` | 重新判题 | 管理员 |
 

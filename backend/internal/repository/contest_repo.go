@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"time"
+
 	"oj-system/internal/model"
 
 	"gorm.io/gorm"
@@ -54,4 +56,20 @@ func (r *ContestRepository) ListAll() ([]model.Contest, error) {
 		return nil, err
 	}
 	return contests, nil
+}
+
+// GetPendingSyncContests 获取已结束但未同步统计的比赛
+func (r *ContestRepository) GetPendingSyncContests() ([]model.Contest, error) {
+	var contests []model.Contest
+	// 查找 EndAt < Now 且 IsStatsSynced = false 的比赛
+	// 使用 Go 的 time.Now() 避免 SQLite 时区问题
+	if err := r.db.Where("end_at < ? AND is_stats_synced = ?", time.Now(), false).Find(&contests).Error; err != nil {
+		return nil, err
+	}
+	return contests, nil
+}
+
+// MarkStatsSynced 标记比赛统计已同步
+func (r *ContestRepository) MarkStatsSynced(id uint) error {
+	return r.db.Model(&model.Contest{}).Where("id = ?", id).Update("is_stats_synced", true).Error
 }

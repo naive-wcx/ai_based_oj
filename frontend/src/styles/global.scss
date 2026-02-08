@@ -1,121 +1,148 @@
+/* Reset & Base */
+:root {
+  --color-primary: #0F52BA; /* Sapphire Blue */
+  --color-primary-hover: #0a3d8f;
+  --color-bg: #F9FAFB;
+  --color-surface: #FFFFFF;
+  --color-text-primary: #111827; /* Gray 900 */
+  --color-text-secondary: #6B7280; /* Gray 500 */
+  --color-border: #E5E7EB; /* Gray 200 */
+  --color-danger: #EF4444;
+  --color-success: #10B981;
+  --color-warning: #F59E0B;
+
+  --font-family-base: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-family-mono: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+}
+
 * {
-  margin: 0;
-  padding: 0;
   box-sizing: border-box;
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
-    'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
-    'Noto Color Emoji';
-  background-color: #f5f7fa;
-  color: #333;
+  margin: 0;
+  font-family: var(--font-family-base);
+  background-color: var(--color-bg);
+  color: var(--color-text-primary);
   line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 a {
-  color: #409eff;
+  color: inherit;
   text-decoration: none;
-  
+  transition: color 0.2s;
+
   &:hover {
-    color: #66b1ff;
+    color: var(--color-primary);
   }
 }
 
-// 状态颜色
-.status {
-  &-accepted {
-    color: #67c23a;
-    font-weight: 600;
-  }
-  
-  &-wrong-answer {
-    color: #f56c6c;
-    font-weight: 600;
-  }
-  
-  &-time-limit {
-    color: #e6a23c;
-    font-weight: 600;
-  }
-  
-  &-runtime-error {
-    color: #909399;
-    font-weight: 600;
-  }
-  
-  &-compile-error {
-    color: #f56c6c;
-    font-weight: 600;
-  }
-  
-  &-pending {
-    color: #909399;
-  }
-  
-  &-judging {
-    color: #409eff;
-  }
+/* Swiss Layout Utilities - Single Source of Truth */
+.swiss-layout {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 60px 20px 40px;
 }
 
-// 难度颜色
-.difficulty {
-  &-easy {
-    color: #67c23a;
-  }
-  
-  &-medium {
-    color: #e6a23c;
-  }
-  
-  &-hard {
-    color: #f56c6c;
-  }
-}
-
-// 代码块
-pre {
-  background-color: #f5f7fa;
-  padding: 16px;
-  border-radius: 4px;
-  overflow-x: auto;
-  
-  code {
-    font-family: 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-    font-size: 14px;
-    line-height: 1.5;
-  }
-}
-
-// 卡片样式
-.card {
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
-  padding: 20px;
-  margin-bottom: 20px;
-}
-
-// 页面标题
-.page-title {
-  font-size: 24px;
-  font-weight: 600;
-  margin-bottom: 20px;
-  color: #303133;
-}
-
-// AI 判题标记
-.ai-badge {
-  display: inline-flex;
+.swiss-header {
+  display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  font-size: 12px;
-  border-radius: 12px;
+  margin-bottom: 50px;
+}
+
+.swiss-title {
+  font-size: 32px;
+  font-weight: 300; /* Light weight for Swiss style */
+  letter-spacing: -0.02em;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+/* Minimal Table Styles */
+.swiss-table {
+  width: 100%;
+  background: transparent !important;
   
-  &::before {
-    content: '🤖';
+  th.el-table__cell {
+    background: transparent !important;
+    font-size: 11px !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+    color: var(--color-text-secondary) !important;
+    border-bottom: 1px solid var(--color-border) !important;
+    padding-bottom: 12px !important;
   }
+  
+  td.el-table__cell {
+    border-bottom: 1px solid rgba(0,0,0,0.03) !important;
+    padding: 16px 0 !important;
+    font-size: 14px;
+  }
+  
+  .el-table__inner-wrapper::before {
+    display: none !important; /* Hide bottom border */
+  }
+
+  .el-table__row:hover > td {
+    background-color: rgba(0,0,0,0.01) !important;
+  }
+}
+
+.swiss-font-mono {
+  font-family: var(--font-family-mono);
+}
+
+.swiss-pagination {
+  margin-top: 60px;
+  display: flex;
+  justify-content: center;
+}
+
+/* Minimalist Element Plus Overrides */
+:root {
+  --el-color-primary: var(--color-primary);
+  --el-border-radius-base: var(--radius-sm);
+  --el-button-font-weight: 500;
+  --el-font-family: var(--font-family-base);
+}
+
+.el-button {
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+  border-color: var(--color-border);
+}
+
+.el-button--primary {
+  --el-button-bg-color: var(--color-primary);
+  --el-button-border-color: var(--color-primary);
+  --el-button-hover-bg-color: var(--color-primary-hover);
+  --el-button-hover-border-color: var(--color-primary-hover);
+}
+
+.el-input__wrapper, .el-select__wrapper {
+  box-shadow: none !important;
+  border-bottom: 1px solid var(--color-border);
+  border-radius: 0 !important;
+  padding-left: 0 !important;
+  background: transparent !important;
+  
+  &.is-focus {
+    box-shadow: none !important;
+    border-bottom-color: var(--color-primary);
+  }
+}
+
+.el-tag {
+  border-radius: var(--radius-sm);
+  border: none;
+  font-weight: 500;
 }

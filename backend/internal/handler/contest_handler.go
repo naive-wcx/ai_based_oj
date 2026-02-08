@@ -181,6 +181,23 @@ func (h *ContestHandler) Delete(c *gin.Context) {
 	c.JSON(http.StatusOK, model.SuccessMessage("删除成功", nil))
 }
 
+// RefreshStats 刷新比赛相关的统计数据
+// POST /api/v1/admin/contests/:id/refresh
+func (h *ContestHandler) RefreshStats(c *gin.Context) {
+	contestID := getUintParam(c, "id")
+	if contestID == 0 {
+		c.JSON(http.StatusBadRequest, model.BadRequest("比赛 ID 无效"))
+		return
+	}
+
+	if err := h.service.RefreshStats(contestID); err != nil {
+		c.JSON(http.StatusInternalServerError, model.ServerError(err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, model.SuccessMessage("刷新统计数据成功", nil))
+}
+
 // GetLeaderboard 获取比赛排行榜（管理员）
 // GET /api/v1/admin/contests/:id/leaderboard
 func (h *ContestHandler) GetLeaderboard(c *gin.Context) {

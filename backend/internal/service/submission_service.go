@@ -74,9 +74,11 @@ func (s *SubmissionService) Submit(req *model.SubmissionCreateRequest, userID ui
 	// 保存代码文件
 	s.saveCodeFile(submission)
 
-	// 增加提交计数
-	s.problemRepo.IncrementSubmitCount(req.ProblemID)
-	s.userRepo.IncrementSubmitCount(userID)
+	// 增加提交计数（仅当不在活动比赛中时）
+	if !s.isProblemInActiveContest(req.ProblemID) {
+		s.problemRepo.IncrementSubmitCount(req.ProblemID)
+		s.userRepo.IncrementSubmitCount(userID)
+	}
 
 	return submission, nil
 }
@@ -134,10 +136,14 @@ func (s *SubmissionService) List(page, size int, problemID, filterUserID uint, s
 func (s *SubmissionService) UpdateResult(submission *model.Submission) error {
 	// 如果是第一次 AC，增加用户解题数和题目通过数
 	if submission.Status == model.StatusAccepted {
-		if !s.repo.HasAccepted(submission.UserID, submission.ProblemID) {
-			s.userRepo.IncrementSolvedCount(submission.UserID)
+		// 只有非比赛提交才立即更新全局统计
+		if !s.isProblemInActiveContest(submission.ProblemID) {
+			if !s.repo.HasAccepted(submission.UserID, submission.ProblemID) {
+				s.userRepo.IncrementSolvedCount(submission.UserID)
+			}
+			s.userRepo.IncrementAcceptedCount(submission.UserID)
+			s.problemRepo.IncrementAcceptedCount(submission.ProblemID)
 		}
-		s.problemRepo.IncrementAcceptedCount(submission.ProblemID)
 	}
 
 	return s.repo.Update(submission)
@@ -173,6 +179,26 @@ func getLanguageExtension(lang string) string {
 		return ext
 	}
 	return ".txt"
+}
+
+// isProblemInActiveContest 检查题目是否属于正在进行的比赛
+func (s *SubmissionService) isProblemInActiveContest(problemID uint) bool {
+	contests, err := s.contestRepo.ListAll()
+	if err != nil {
+		// 如果获取比赛列表失败，为了安全起见（避免泄题），假设不在比赛中？
+		// 或者假设在比赛中？
+		// 这里选择假设不在，因为这主要影响统计数据。
+		return false
+	}
+	now := time.Now()
+	for _, contest := range contests {
+		if now.After(contest.StartAt) && now.Before(contest.EndAt) {
+			if containsUint([]uint(contest.ProblemIDs), problemID) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (s *SubmissionService) maskSubmissionForOngoingOI(submission *model.Submission, viewerID uint) {

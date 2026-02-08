@@ -1,193 +1,150 @@
 <template>
-  <div v-loading="loading" class="problem-detail-container">
+  <div v-loading="loading" class="problem-detail-wrapper">
     <template v-if="problem">
-      <splitpanes class="default-theme" style="height: calc(100vh - 100px)">
-        <pane min-size="30" class="problem-pane">
-          <el-card shadow="never" class="problem-card">
-            <template #header>
-              <div class="problem-header">
-                <h1 class="title">{{ problem.id }}. {{ problem.title }}</h1>
-                <div class="info">
-                  <span>时间限制: {{ problem.time_limit }}ms</span>
-                  <span>内存限制: {{ problem.memory_limit }}MB</span>
-                </div>
+      <splitpanes class="minimal-splitpanes" style="height: calc(100vh - 65px)">
+        <!-- Problem Description Pane -->
+        <pane min-size="30" class="left-pane">
+          <div class="paper-content">
+            <div class="problem-header">
+              <h1 class="title">{{ problem.title }}</h1>
+              <div class="meta-line">
+                <span class="meta-item">时间限制: {{ problem.time_limit }}ms</span>
+                <span class="meta-item">内存限制: {{ problem.memory_limit }}MB</span>
+                <span class="meta-item">IO模式: 标准输入输出</span>
               </div>
-            </template>
-            <div class="tags">
-              <el-tag :type="getDifficultyTag(problem.difficulty).type" size="small">{{
-                getDifficultyTag(problem.difficulty).label
-              }}</el-tag>
-              <el-tag
-                v-for="tag in problem.tags"
-                :key="tag"
-                size="small"
-                effect="plain"
-                >{{ tag }}</el-tag
-              >
-              <el-tag v-if="problem.has_accepted" type="success" size="small"
-                >已通过</el-tag
-              >
+              <div class="tags-line">
+                <span :class="['difficulty-tag', problem.difficulty]">{{ formatDifficulty(problem.difficulty) }}</span>
+                <span v-for="tag in problem.tags" :key="tag" class="minimal-tag">{{ tag }}</span>
+              </div>
             </div>
 
-            <div v-if="problem.file_io_enabled" class="file-io-section">
-              <el-alert type="warning" :closable="false" show-icon>
-                <template #title>
-                  <strong>本题需要文件操作</strong>
-                </template>
-                <div class="file-io-content">
-                  <div class="file-io-item">
-                    <span>输入：</span>
-                    <el-tag type="info" effect="light">{{ problem.file_input_name }}</el-tag>
-                  </div>
-                  <div class="file-io-item">
-                    <span>输出：</span>
-                    <el-tag type="info" effect="light">{{ problem.file_output_name }}</el-tag>
-                  </div>
-                </div>
-              </el-alert>
-            </div>
-
-            <div v-if="problem.ai_judge_config?.enabled" class="ai-section">
-              <el-alert type="info" :closable="false" show-icon>
-                <template #title>
-                  <strong>本题已启用 AI 智能分析</strong>
-                </template>
-                <div class="ai-requirements">
-                  <p>请注意，AI 将对你的代码进行以下维度的评估：</p>
-                  <ul>
+            <div v-if="problem.ai_judge_config?.enabled" class="alert-box ai">
+              <div class="alert-title">本题已启用 AI 智能分析</div>
+              <div class="alert-content">
+                <p>AI 判题系统将检查您的代码是否符合以下约束条件：</p>
+                <ul>
                     <li v-if="problem.ai_judge_config.required_algorithm">
-                      <strong>算法要求:</strong> {{ problem.ai_judge_config.required_algorithm }}
+                        <strong>指定算法:</strong> {{ problem.ai_judge_config.required_algorithm }}
                     </li>
                     <li v-if="problem.ai_judge_config.required_language">
-                      <strong>语言要求:</strong> {{ problem.ai_judge_config.required_language }}
+                        <strong>指定语言:</strong> {{ problem.ai_judge_config.required_language }}
                     </li>
                     <li v-if="problem.ai_judge_config.forbidden_features?.length">
-                      <strong>禁用特性:</strong>
-                      <el-tag
-                        v-for="feature in problem.ai_judge_config.forbidden_features"
-                        :key="feature"
-                        type="danger"
-                        effect="light"
-                        size="small"
-                        class="ai-feature-tag"
-                        >{{ feature }}</el-tag
-                      >
+                        <strong>禁用特性:</strong> {{ problem.ai_judge_config.forbidden_features.join(', ') }}
                     </li>
                     <li v-if="problem.ai_judge_config.custom_prompt">
-                      <strong>自定义提示:</strong> {{ problem.ai_judge_config.custom_prompt }}
+                        <strong>额外要求:</strong> {{ problem.ai_judge_config.custom_prompt }}
                     </li>
-                  </ul>
-                </div>
-              </el-alert>
+                </ul>
+              </div>
+            </div>
+            
+            <div v-if="problem.file_io_enabled" class="alert-box warning">
+              <div class="alert-title">文件读写要求</div>
+              <div class="alert-content">
+                请从文件 <code class="inline-code">{{ problem.file_input_name }}</code> 读取输入，并将结果输出到 <code class="inline-code">{{ problem.file_output_name }}</code>
+              </div>
             </div>
 
-            <div class="content-section">
-              <h3>题目描述</h3>
+            <div class="markdown-body">
+              <div class="section-title">题目描述</div>
               <MarkdownPreview :content="problem.description" />
-            </div>
-            <div class="content-section">
-              <h3>输入格式</h3>
+              
+              <div class="section-title">输入格式</div>
               <MarkdownPreview :content="problem.input_format" />
-            </div>
-            <div class="content-section">
-              <h3>输出格式</h3>
+              
+              <div class="section-title">输出格式</div>
               <MarkdownPreview :content="problem.output_format" />
-            </div>
-            <div class="content-section">
-              <h3>样例</h3>
-              <div
-                v-for="(sample, index) in problem.samples"
-                :key="index"
-                class="sample"
-              >
-                <el-card shadow="never" class="sample-card">
-                  <template #header>
-                    <div class="sample-header">
-                      <span>样例 #{{ index + 1 }}</span>
-                    </div>
-                  </template>
-                  <el-row :gutter="16">
-                    <el-col :md="12" :sm="24">
-                      <div class="sample-io">
-                        <div class="sample-io-header">
-                          <label>输入</label>
-                          <el-button
-                            :icon="CopyDocument"
-                            text
-                            size="small"
-                            @click="copyToClipboard(sample.input)"
-                          />
-                        </div>
-                        <pre>{{ sample.input }}</pre>
-                      </div>
-                    </el-col>
-                    <el-col :md="12" :sm="24">
-                       <div class="sample-io">
-                         <div class="sample-io-header">
-                          <label>输出</label>
-                          <el-button
-                            :icon="CopyDocument"
-                            text
-                            size="small"
-                            @click="copyToClipboard(sample.output)"
-                          />
-                        </div>
-                        <pre>{{ sample.output }}</pre>
-                      </div>
-                    </el-col>
-                  </el-row>
-                </el-card>
+              
+              <div class="section-title">样例数据</div>
+              <div v-for="(sample, index) in problem.samples" :key="index" class="sample-box">
+                <div class="sample-header">
+                  <span>样例 #{{ index + 1 }}</span>
+                  <div class="copy-actions">
+                    <span @click="copyToClipboard(sample.input)" class="copy-btn">复制输入</span>
+                    <span class="divider">|</span>
+                    <span @click="copyToClipboard(sample.output)" class="copy-btn">复制输出</span>
+                  </div>
+                </div>
+                <div class="sample-grid">
+                  <div class="sample-col">
+                    <div class="col-label">输入</div>
+                    <pre>{{ sample.input }}</pre>
+                  </div>
+                  <div class="sample-col">
+                    <div class="col-label">输出</div>
+                    <pre>{{ sample.output }}</pre>
+                  </div>
+                </div>
               </div>
             </div>
-          </el-card>
+          </div>
         </pane>
-        <pane min-size="30" class="submit-pane">
-          <el-card shadow="never" class="submit-card">
-            <template #header>
-              <div class="submit-header">
-                <div class="submit-header-left">
-                  <el-icon><EditPen /></el-icon>
-                  <span>提交代码</span>
-                </div>
-                 <div class="submit-header-right">
-                  <span class="tab-size-label">Tab长度</span>
-                  <el-select v-model="tabSize" size="small" style="width: 70px;">
-                    <el-option :value="2" />
-                    <el-option :value="4" />
-                    <el-option :value="8" />
-                  </el-select>
-                </div>
+
+        <!-- Code Editor Pane -->
+        <pane min-size="30" class="right-pane">
+          <div class="editor-container">
+            <div class="editor-toolbar">
+              <div class="toolbar-left">
+                <span class="toolbar-label">语言</span>
+                <el-select 
+                  v-model="submission.language" 
+                  class="language-select" 
+                  size="small"
+                >
+                  <el-option label="C++" value="cpp" />
+                  <el-option label="C" value="c" />
+                  <el-option label="Python" value="python" />
+                  <el-option label="Java" value="java" />
+                  <el-option label="Go" value="go" />
+                </el-select>
+
+                <span class="toolbar-label" style="margin-left: 16px">字号</span>
+                <el-select 
+                  v-model="fontSize" 
+                  class="language-select" 
+                  size="small"
+                  style="width: 80px"
+                >
+                  <el-option label="12px" :value="12" />
+                  <el-option label="14px" :value="14" />
+                  <el-option label="16px" :value="16" />
+                  <el-option label="18px" :value="18" />
+                  <el-option label="20px" :value="20" />
+                </el-select>
+
+                <span class="toolbar-label" style="margin-left: 16px">Tab Size</span>
+                <el-select 
+                  v-model="tabSize" 
+                  class="language-select" 
+                  size="small"
+                  style="width: 80px"
+                >
+                  <el-option label="2 空格" :value="2" />
+                  <el-option label="4 空格" :value="4" />
+                  <el-option label="8 空格" :value="8" />
+                </el-select>
               </div>
-            </template>
-            <el-select
-              v-model="submission.language"
-              placeholder="选择语言"
-              style="margin-bottom: 16px"
-            >
-              <el-option label="C++" value="cpp" />
-              <el-option label="C" value="c" />
-              <el-option label="Python" value="python" />
-              <el-option label="Java" value="java" />
-              <el-option label="Go" value="go" />
-            </el-select>
+              <div class="toolbar-right">
+                <el-button 
+                  type="primary" 
+                  :loading="submitting" 
+                  @click="handleSubmit"
+                  class="submit-btn"
+                >
+                  提交运行
+                </el-button>
+              </div>
+            </div>
 
             <CodeEditor
               v-model="submission.code"
               :language="submission.language"
               :tab-size="tabSize"
-              class="code-editor-component"
+              :font-size="fontSize"
+              class="minimal-editor"
             />
-
-            <el-button
-              type="primary"
-              :loading="submitting"
-              @click="handleSubmit"
-              style="width: 100%; margin-top: 16px"
-              size="large"
-            >
-              提交
-            </el-button>
-          </el-card>
+          </div>
         </pane>
       </splitpanes>
     </template>
@@ -198,7 +155,6 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from '@/utils/message'
-import { EditPen, CopyDocument } from '@element-plus/icons-vue'
 import { Splitpanes, Pane } from 'splitpanes'
 import 'splitpanes/dist/splitpanes.css'
 import { problemApi } from '@/api/problem'
@@ -215,28 +171,55 @@ const loading = ref(true)
 const submitting = ref(false)
 const problem = ref(null)
 const tabSize = ref(4)
+const fontSize = ref(14)
 
 const submission = reactive({
   language: 'cpp',
   code: '',
 })
 
-const getDifficultyTag = (difficulty) => {
-  const settings = {
-    easy: { type: 'success', label: '简单' },
-    medium: { type: 'warning', label: '中等' },
-    hard: { type: 'danger', label: '困难' },
+const formatDifficulty = (val) => {
+  const map = { easy: '简单', medium: '中等', hard: '困难' }
+  return map[val] || val
+}
+
+function fallbackCopyTextToClipboard(text) {
+  var textArea = document.createElement("textarea");
+  textArea.value = text;
+  
+  // Ensure it's not visible but part of the DOM
+  textArea.style.position = "fixed";
+  textArea.style.left = "-9999px";
+  textArea.style.top = "0";
+  
+  document.body.appendChild(textArea);
+  textArea.focus();
+  textArea.select();
+
+  try {
+    var successful = document.execCommand('copy');
+    if (successful) {
+      message.success('已复制');
+    } else {
+      message.error('复制失败');
+    }
+  } catch (err) {
+    message.error('复制失败');
   }
-  return settings[difficulty] || { type: 'info', label: difficulty }
+
+  document.body.removeChild(textArea);
 }
 
 async function copyToClipboard(text) {
+  if (!navigator.clipboard) {
+    fallbackCopyTextToClipboard(text);
+    return;
+  }
   try {
     await navigator.clipboard.writeText(text);
-    message.success('已复制到剪切板');
+    message.success('已复制');
   } catch (err) {
-    message.error('复制失败');
-    console.error('Failed to copy: ', err);
+    fallbackCopyTextToClipboard(text);
   }
 }
 
@@ -246,7 +229,7 @@ async function fetchProblem() {
     const res = await problemApi.getById(route.params.id)
     problem.value = res.data
   } catch (e) {
-    message.error('题目加载失败')
+    message.error('加载题目失败')
     console.error(e)
   } finally {
     loading.value = false
@@ -255,13 +238,13 @@ async function fetchProblem() {
 
 async function handleSubmit() {
   if (!userStore.isLoggedIn) {
-    message.warning('请先登录再提交')
+    message.warning('请先登录')
     router.push({ name: 'Login', query: { redirect: route.fullPath } })
     return
   }
 
   if (!submission.code.trim()) {
-    message.warning('提交的代码不能为空')
+    message.warning('代码不能为空')
     return
   }
 
@@ -272,10 +255,10 @@ async function handleSubmit() {
       language: submission.language,
       code: submission.code,
     })
-    message.success('提交成功！正在跳转到评测记录...')
+    message.success('提交成功')
     router.push(`/submission/${res.data.id}`)
   } catch (e) {
-    // Error message is likely handled by the request interceptor
+    // Error handled by interceptor
   } finally {
     submitting.value = false
   }
@@ -287,220 +270,251 @@ onMounted(() => {
 </script>
 
 <style lang="scss" scoped>
-.problem-detail-container {
-  height: calc(100vh - 60px); // Full viewport height minus navbar
+.problem-detail-wrapper {
+  background-color: var(--color-bg);
+  height: calc(100vh - 65px);
   overflow: hidden;
-  background-color: #f7f8fa;
-  padding: 10px;
 }
 
-.problem-pane {
+.left-pane {
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
   overflow-y: auto;
 }
 
-.submit-pane {
+.right-pane {
+  background: #1e1e1e; /* Dark theme for editor background usually matches better */
   display: flex;
   flex-direction: column;
-
-  .submit-card {
-    border: none;
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-
-    :deep(.el-card__body) {
-      display: flex;
-      flex-direction: column;
-      flex-grow: 1;
-      padding: 20px !important;
-    }
-  }
 }
 
-.code-editor-component {
-  flex-grow: 1;
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.problem-card {
-  border: none;
-  :deep(.el-card__body) {
-    padding: 20px !important;
-  }
+.paper-content {
+  padding: 40px;
+  max-width: 900px;
+  margin: 0 auto;
 }
 
 .problem-header {
+  margin-bottom: 32px;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 24px;
+  
   .title {
-    font-size: 26px;
+    font-size: 28px;
     font-weight: 600;
-    margin: 0 0 12px;
-    color: #303133;
+    color: var(--color-text-primary);
+    margin: 0 0 12px 0;
+    letter-spacing: -0.01em;
   }
-  .info {
-    font-size: 14px;
-    color: #909399;
-    span {
-      margin-right: 20px;
-    }
-  }
-}
-
-.tags {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
-  margin-bottom: 24px;
-}
-
-.ai-section {
-  margin-bottom: 24px;
-  .ai-requirements {
-    margin-top: 8px;
-    font-size: 14px;
-    p {
-      margin: 0 0 8px;
-    }
-    ul {
-      padding-left: 20px;
-      margin: 0;
-    }
-    li {
-      margin-bottom: 4px;
-    }
-    .ai-feature-tag {
-      margin: 0 4px;
+  
+  .meta-line {
+    font-family: var(--font-family-mono);
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    margin-bottom: 16px;
+    
+    .meta-item {
+      margin-right: 24px;
     }
   }
-}
-
-.file-io-section {
-  margin-bottom: 24px;
-
-  .file-io-content {
-    margin-top: 8px;
+  
+  .tags-line {
     display: flex;
-    gap: 16px;
-    flex-wrap: wrap;
-    font-size: 14px;
-  }
-
-  .file-io-item {
-    display: flex;
-    align-items: center;
     gap: 8px;
   }
 }
 
-.content-section {
+.difficulty-tag {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  
+  &.easy { color: var(--color-success); background: rgba(16, 185, 129, 0.1); }
+  &.medium { color: var(--color-warning); background: rgba(245, 158, 11, 0.1); }
+  &.hard { color: var(--color-danger); background: rgba(239, 68, 68, 0.1); }
+}
+
+.minimal-tag {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  background: #F3F4F6;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.alert-box {
+  padding: 16px;
+  border-radius: 6px;
   margin-bottom: 24px;
-  h3 {
-    font-size: 20px;
-    margin: 0 0 16px;
-    color: #303133;
+  font-size: 14px;
+  
+  .alert-title {
     font-weight: 600;
-    border-left: 4px solid var(--el-color-primary);
-    padding-left: 12px;
+    margin-bottom: 8px;
+  }
+  
+  .alert-content {
+      line-height: 1.6;
+      ul {
+          margin: 4px 0 0 20px;
+          padding: 0;
+      }
+      li {
+          margin-bottom: 4px;
+      }
+  }
+  
+  &.ai {
+    background: #EEF2FF;
+    color: #4338CA;
+    border: 1px solid #E0E7FF;
+  }
+  
+  &.warning {
+    background: #FFFBEB;
+    color: #B45309;
+    border: 1px solid #FEF3C7;
+  }
+  
+  .inline-code {
+    background: rgba(0,0,0,0.05);
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-family: var(--font-family-mono);
   }
 }
 
-.sample {
-  margin-bottom: 16px;
-}
-.sample-card {
-  background-color: #fafafa;
-  border: 1px solid #e4e7ed;
-}
-
-.sample-header {
-  font-weight: 500;
-  color: #606266;
-}
-
-.sample-io-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.sample-io {
-  label {
-    font-weight: 500;
-    color: #909399;
-    font-size: 14px;
-  }
-
-  pre {
-    margin: 0;
-    padding: 12px;
-    background: #ffffff;
-    border: 1px solid #e4e7ed;
-    border-radius: 4px;
-    font-size: 14px;
-    font-family: 'Fira Code', 'Monaco', monospace;
-    white-space: pre-wrap;
-    word-break: break-all;
-  }
-}
-
-.submit-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
+.section-title {
   font-size: 18px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-text-primary);
+  margin-top: 32px;
+  margin-bottom: 16px;
 }
 
-.submit-header-left, .submit-header-right {
+.sample-box {
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  margin-bottom: 20px;
+  overflow: hidden;
+  
+  .sample-header {
+    background: #F9FAFB;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--color-border);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    display: flex;
+    justify-content: space-between;
+    
+    .copy-actions {
+      display: flex;
+      gap: 8px;
+      
+      .copy-btn {
+        cursor: pointer;
+        &:hover { color: var(--color-primary); }
+      }
+      .divider { color: var(--color-border); }
+    }
+  }
+  
+  .sample-grid {
+    display: flex;
+    
+    .sample-col {
+      flex: 1;
+      padding: 16px;
+      
+      &:first-child {
+        border-right: 1px solid var(--color-border);
+      }
+      
+      .col-label {
+        font-size: 11px;
+        text-transform: uppercase;
+        color: var(--color-text-secondary);
+        margin-bottom: 8px;
+        letter-spacing: 0.05em;
+      }
+      
+      pre {
+        margin: 0;
+        font-family: var(--font-family-mono);
+        font-size: 14px;
+        white-space: pre-wrap;
+        word-break: break-all;
+        color: var(--color-text-primary);
+      }
+    }
+  }
+}
+
+.editor-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #1e1e1e; /* Match editor */
+}
+
+.editor-toolbar {
+  height: 50px;
+  background: #252526; /* VS Code header style */
+  border-bottom: 1px solid #333;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 16px;
+}
+
+.toolbar-left {
   display: flex;
   align-items: center;
-  gap: 8px;
-}
-
-.tab-size-label {
-  font-size: 14px;
-  color: #909399;
-  font-weight: normal;
-}
-
-/* Splitpanes custom theme */
-.splitpanes.default-theme .splitpanes__splitter {
-  background-color: #f0f2f5;
-  border-left: 1px solid #e4e7ed;
-  border-right: 1px solid #e4e7ed;
-  box-sizing: border-box;
-  position: relative;
-  width: 7px;
-}
-
-.splitpanes.default-theme .splitpanes__splitter:before {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: 2px;
-  height: 30px;
-  background-color: #c0c4cc;
-  border-radius: 2px;
-}
-
-.splitpanes.default-theme .splitpanes__splitter:hover:before {
-  background-color: var(--el-color-primary);
-}
-
-@media (max-width: 768px) {
-  .splitpanes--vertical > .splitpanes__splitter {
-    width: 100% !important;
-    height: 7px !important;
+  gap: 12px;
+  
+  .toolbar-label {
+    color: #9CA3AF;
+    font-size: 13px;
   }
-  .splitpanes.default-theme .splitpanes__splitter:before {
-    width: 30px;
-    height: 2px;
+  
+  .language-select {
+    width: 100px;
+    :deep(.el-input__wrapper),
+    :deep(.el-select__wrapper) {
+      background-color: #374151 !important;
+      box-shadow: none !important;
+      border: 1px solid #4B5563;
+      
+      .el-input__inner,
+      .el-select__selected-item {
+        color: #FFFFFF !important;
+      }
+    }
+  }
+}
+
+.minimal-editor {
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Splitpanes overrides */
+:deep(.splitpanes__splitter) {
+  background-color: var(--color-border) !important;
+  width: 1px !important;
+  border: none !important;
+  
+  &:hover {
+    background-color: var(--color-primary) !important;
+    width: 2px !important;
+  }
+  
+  &::before, &::after {
+    display: none !important;
   }
 }
 </style>

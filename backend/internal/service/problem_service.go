@@ -1,11 +1,14 @@
 package service
 
 import (
+	"archive/zip"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -350,6 +353,158 @@ func normalizeFileIO(req *model.ProblemCreateRequest) (bool, string, string, err
 	}
 
 	return true, inputName, outputName, nil
+}
+
+// UploadTestcaseZip 批量上传测试用例 (Zip)
+func (s *ProblemService) UploadTestcaseZip(problemID uint, zipPath string) error {
+	// 1. 打开 Zip 文件
+	r, err := zip.OpenReader(zipPath)
+	if err != nil {
+		return errors.New("无法打开 zip 文件")
+	}
+	defer r.Close()
+
+	// 2. 扫描文件，寻找配对
+	// Map baseName -> {input: file, output: file}
+	type pair struct {
+		Input  *zip.File
+		Output *zip.File
+	}
+	pairs := make(map[string]*pair)
+
+	for _, f := range r.File {
+		if f.FileInfo().IsDir() {
+			continue
+		}
+		// 忽略隐藏文件
+		if strings.HasPrefix(f.Name, ".") || strings.HasPrefix(filepath.Base(f.Name), ".") {
+			continue
+		}
+
+		ext := filepath.Ext(f.Name)
+		// 获取去掉扩展名后的路径作为 key
+		base := strings.TrimSuffix(f.Name, ext)
+		
+		if _, ok := pairs[base]; !ok {
+			pairs[base] = &pair{}
+		}
+
+		if ext == ".in" {
+			pairs[base].Input = f
+		} else if ext == ".out" || ext == ".ans" {
+			pairs[base].Output = f
+		}
+	}
+
+	// 3. 筛选有效配对
+	var validPairs []*pair
+	for _, p := range pairs {
+		if p.Input != nil && p.Output != nil {
+			validPairs = append(validPairs, p)
+		}
+	}
+
+	if len(validPairs) == 0 {
+		return errors.New("未找到匹配的输入输出文件 (.in + .out/.ans)")
+	}
+
+	// 4. 排序 (尝试按文件名中的数字排序)
+	sort.Slice(validPairs, func(i, j int) bool {
+		return compareFileNames(validPairs[i].Input.Name, validPairs[j].Input.Name)
+	})
+
+	// 5. 删除旧数据
+	if err := s.DeleteTestcases(problemID); err != nil {
+		return err
+	}
+
+	// 6. 保存新数据
+	problemDir := filepath.Join(config.GlobalConfig.Paths.Problems, fmt.Sprintf("%d", problemID))
+	os.MkdirAll(problemDir, 0755)
+
+	// 计算每个测试点的分数
+	scorePerCase := 100 / len(validPairs)
+	if scorePerCase == 0 {
+		scorePerCase = 1
+	}
+
+	for i, p := range validPairs {
+		orderNum := i + 1
+		
+		// 复制 Input
+		inputFile := filepath.Join(problemDir, fmt.Sprintf("%d.in", orderNum))
+		if err := extractZipFile(p.Input, inputFile); err != nil {
+			return err
+		}
+
+		// 复制 Output
+		outputFile := filepath.Join(problemDir, fmt.Sprintf("%d.out", orderNum))
+		if err := extractZipFile(p.Output, outputFile); err != nil {
+			return err
+		}
+
+		// 最后一个测试点补齐分数
+		score := scorePerCase
+		if i == len(validPairs)-1 {
+			score = 100 - scorePerCase*(len(validPairs)-1)
+		}
+
+		// 创建记录
+		testcase := &model.Testcase{
+			ProblemID:  problemID,
+			InputFile:  inputFile,
+			OutputFile: outputFile,
+			Score:      score,
+			IsSample:   false,
+			OrderNum:   orderNum,
+		}
+		if err := s.repo.CreateTestcase(testcase); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func extractZipFile(f *zip.File, dest string) error {
+	rc, err := f.Open()
+	if err != nil {
+		return err
+	}
+	defer rc.Close()
+
+	w, err := os.Create(dest)
+	if err != nil {
+		return err
+	}
+	defer w.Close()
+
+	_, err = io.Copy(w, rc)
+	return err
+}
+
+// 简单的文件名数字排序比较
+func compareFileNames(a, b string) bool {
+	// 提取数字正则
+	re := regexp.MustCompile(`(\d+)`)
+	numsA := re.FindAllString(a, -1)
+	numsB := re.FindAllString(b, -1)
+
+	if len(numsA) > 0 && len(numsB) > 0 {
+		// 比较最后一个数字（通常是序号）
+		nA := numsA[len(numsA)-1]
+		nB := numsB[len(numsB)-1]
+		
+		// 如果数字长度不同，长的更大
+		if len(nA) != len(nB) {
+			return len(nA) < len(nB)
+		}
+		// 长度相同，字典序比较
+		if nA != nB {
+			return nA < nB
+		}
+	}
+	return a < b
 }
 
 func validateFileName(name string, suffix string) error {

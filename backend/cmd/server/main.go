@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"oj-system/internal/config"
 	"oj-system/internal/judge"
 	"oj-system/internal/model"
 	"oj-system/internal/repository"
 	"oj-system/internal/router"
+	"oj-system/internal/service"
 	"oj-system/internal/utils"
 )
 
@@ -43,6 +45,9 @@ func main() {
 
 	// 启动判题服务
 	judge.Start(cfg)
+
+	// 启动定时任务（如赛后统计同步）
+	startCronTasks()
 
 	// 设置路由
 	r := router.SetupRouter(cfg.Server.Mode)
@@ -99,4 +104,28 @@ func createDefaultAdmin() {
 	}
 
 	log.Printf("已创建默认管理员账号: admin / admin123")
+}
+
+// startCronTasks 启动定时任务
+func startCronTasks() {
+	go func() {
+		contestService := service.NewContestService()
+		maintenanceService := service.NewMaintenanceService()
+
+		// 启动时立即执行一次全量同步，修复所有历史数据不一致问题
+		log.Println("正在执行启动时全量数据修复...")
+		maintenanceService.SyncAllStats()
+
+		// 启动时立即检查一次已结束的比赛
+		contestService.SyncEndedContests()
+
+		ticker := time.NewTicker(1 * time.Minute)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			// 同步已结束比赛的统计数据
+			contestService.SyncEndedContests()
+		}
+	}()
+	log.Printf("定时任务已启动")
 }
