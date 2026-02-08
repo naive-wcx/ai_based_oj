@@ -77,6 +77,11 @@
                   </div>
                 </div>
               </div>
+
+              <template v-if="problem.hint">
+                <div class="section-title">提示</div>
+                <MarkdownPreview :content="problem.hint" />
+              </template>
             </div>
           </div>
         </pane>

@@ -1,338 +1,368 @@
 <template>
-  <div class="problem-edit">
-    <div class="page-header">
-      <h2>{{ isEdit ? '编辑题目' : '创建题目' }}</h2>
-    </div>
-    
-    <el-form
-      ref="formRef"
-      :model="form"
-      :rules="rules"
-      label-width="120px"
-      class="card"
-      v-loading="loading"
-    >
-      <el-form-item label="题目标题" prop="title">
-        <el-input v-model="form.title" placeholder="请输入题目标题" />
-      </el-form-item>
-      
-      <el-form-item label="题目描述" prop="description">
-        <div class="editor-with-preview">
-          <div class="editor-section">
-            <el-input
-              v-model="form.description"
-              type="textarea"
-              :rows="10"
-              placeholder="支持 Markdown 格式"
-            />
-          </div>
-          <div class="preview-section">
-            <div class="preview-header">
-              <span>预览</span>
-            </div>
-            <div class="preview-content">
-              <MarkdownPreview :content="form.description" />
-            </div>
-          </div>
+  <div class="problem-edit-wrapper">
+    <div class="container">
+      <div class="page-header">
+        <h1 class="page-title">{{ isEdit ? '编辑题目' : '创建题目' }}</h1>
+        <div class="actions">
+          <el-button @click="$router.back()">取消</el-button>
         </div>
-      </el-form-item>
-      
-      <el-form-item label="输入格式">
-        <div class="editor-with-preview">
-          <div class="editor-section">
-            <el-input
-              v-model="form.input_format"
-              type="textarea"
-              :rows="4"
-              placeholder="输入格式说明（支持 Markdown）"
-            />
-          </div>
-          <div class="preview-section small">
-            <div class="preview-header"><span>预览</span></div>
-            <div class="preview-content">
-              <MarkdownPreview :content="form.input_format" />
-            </div>
-          </div>
-        </div>
-      </el-form-item>
-      
-      <el-form-item label="输出格式">
-        <div class="editor-with-preview">
-          <div class="editor-section">
-            <el-input
-              v-model="form.output_format"
-              type="textarea"
-              :rows="4"
-              placeholder="输出格式说明（支持 Markdown）"
-            />
-          </div>
-          <div class="preview-section small">
-            <div class="preview-header"><span>预览</span></div>
-            <div class="preview-content">
-              <MarkdownPreview :content="form.output_format" />
-            </div>
-          </div>
-        </div>
-      </el-form-item>
-      
-      <el-form-item label="样例">
-        <div v-for="(sample, index) in form.samples" :key="index" class="sample-item">
-          <div class="sample-inputs">
-            <el-input
-              v-model="sample.input"
-              type="textarea"
-              :rows="3"
-              placeholder="输入"
-            />
-            <el-input
-              v-model="sample.output"
-              type="textarea"
-              :rows="3"
-              placeholder="输出"
-            />
-          </div>
-          <el-button type="danger" text @click="removeSample(index)">删除</el-button>
-        </div>
-        <el-button @click="addSample">添加样例</el-button>
-      </el-form-item>
-      
-      <el-row :gutter="20">
-        <el-col :span="8">
-          <el-form-item label="时间限制">
-            <el-input-number v-model="form.time_limit" :min="100" :max="10000" :step="100" />
-            <span class="unit">ms</span>
-          </el-form-item>
-        </el-col>
-        <el-col :span="8">
-          <el-form-item label="内存限制">
-            <el-input-number v-model="form.memory_limit" :min="16" :max="1024" :step="16" />
-            <span class="unit">MB</span>
-          </el-form-item>
-        </el-col>
-        <el-col :span="8">
-          <el-form-item label="难度">
-            <el-select v-model="form.difficulty" style="width: 100%">
-              <el-option label="简单" value="easy" />
-              <el-option label="中等" value="medium" />
-              <el-option label="困难" value="hard" />
-            </el-select>
-          </el-form-item>
-        </el-col>
-      </el-row>
-      
-      <el-form-item label="标签">
-        <el-select
-          v-model="form.tags"
-          multiple
-          filterable
-          allow-create
-          placeholder="选择或输入标签"
-          style="width: 100%"
-        >
-          <el-option v-for="tag in commonTags" :key="tag" :label="tag" :value="tag" />
-        </el-select>
-      </el-form-item>
-      
-      <el-form-item label="是否公开">
-        <el-switch v-model="form.is_public" />
-      </el-form-item>
-
-      <el-divider content-position="left">文件操作</el-divider>
-
-      <el-form-item label="启用文件操作">
-        <el-switch v-model="form.file_io_enabled" @change="handleFileIOToggle" />
-        <span class="hint">开启后需从指定文件读写（如 data.in / data.out）</span>
-      </el-form-item>
-
-      <template v-if="form.file_io_enabled">
-        <el-form-item label="输入文件名">
-          <el-input
-            v-model="form.file_input_name"
-            placeholder="例如：data.in"
-          />
-        </el-form-item>
-        <el-form-item label="输出文件名">
-          <el-input
-            v-model="form.file_output_name"
-            placeholder="例如：data.out"
-          />
-        </el-form-item>
-      </template>
-      
-      <el-divider content-position="left">AI 判题配置</el-divider>
-      
-      <el-form-item label="启用 AI 判题">
-        <el-switch v-model="form.ai_judge_config.enabled" />
-      </el-form-item>
-      
-      <template v-if="form.ai_judge_config.enabled">
-        <el-form-item label="要求算法">
-          <el-input
-            v-model="form.ai_judge_config.required_algorithm"
-            placeholder="如：动态规划、DFS、贪心 等"
-          />
-        </el-form-item>
-        
-        <el-form-item label="要求语言">
-          <el-select v-model="form.ai_judge_config.required_language" clearable style="width: 100%">
-            <el-option label="不限" value="" />
-            <el-option label="C" value="C" />
-            <el-option label="C++" value="C++" />
-            <el-option label="Python" value="Python" />
-            <el-option label="Java" value="Java" />
-            <el-option label="Go" value="Go" />
-          </el-select>
-        </el-form-item>
-        
-        <el-form-item label="禁止特性">
-          <el-select
-            v-model="form.ai_judge_config.forbidden_features"
-            multiple
-            filterable
-            allow-create
-            placeholder="选择或输入禁止使用的特性"
-            style="width: 100%"
-          >
-            <el-option label="STL sort" value="STL sort" />
-            <el-option label="递归" value="递归" />
-            <el-option label="全局变量" value="全局变量" />
-          </el-select>
-        </el-form-item>
-        
-        <el-form-item label="自定义说明">
-          <el-input
-            v-model="form.ai_judge_config.custom_prompt"
-            type="textarea"
-            :rows="3"
-            placeholder="额外的判题说明"
-          />
-        </el-form-item>
-        
-        <el-form-item label="严格模式">
-          <el-switch v-model="form.ai_judge_config.strict_mode" />
-          <span class="hint">开启后，AI 判定不通过将直接判为 Wrong Answer</span>
-        </el-form-item>
-      </template>
-      
-      <el-form-item>
-        <el-button type="primary" :loading="submitting" @click="handleSubmit">
-          {{ isEdit ? '保存修改' : '创建题目' }}
-        </el-button>
-        <el-button @click="$router.back()">取消</el-button>
-      </el-form-item>
-    </el-form>
-    
-    <!-- 测试数据管理 -->
-    <div class="card" v-if="isEdit">
-      <h3>测试数据管理</h3>
-      
-      <el-tabs type="border-card" class="testcase-tabs">
-        <el-tab-pane label="逐个上传">
-          <div class="upload-panel">
-            <el-upload
-              ref="inputUploadRef"
-              action=""
-              :auto-upload="false"
-              :limit="1"
-              :on-change="handleInputChange"
-              :on-remove="() => inputFile = null"
-              accept=".in,.txt"
-              class="upload-item"
-            >
-              <template #trigger>
-                <el-button icon="Document">选择输入 (.in)</el-button>
-              </template>
-              <div class="el-upload__tip" v-if="inputFile">已选: {{ inputFile.name }}</div>
-            </el-upload>
-            
-            <el-upload
-              ref="outputUploadRef"
-              action=""
-              :auto-upload="false"
-              :limit="1"
-              :on-change="handleOutputChange"
-              :on-remove="() => outputFile = null"
-              accept=".out,.txt"
-              class="upload-item"
-            >
-              <template #trigger>
-                <el-button icon="Document">选择输出 (.out)</el-button>
-              </template>
-              <div class="el-upload__tip" v-if="outputFile">已选: {{ outputFile.name }}</div>
-            </el-upload>
-            
-            <div class="score-input">
-              <span class="label">分值:</span>
-              <el-input-number v-model="testcaseScore" :min="1" :max="100" style="width: 140px" />
-            </div>
-            
-            <el-button type="primary" @click="uploadTestcase" :loading="uploadingTestcase">
-              上传测试点
-            </el-button>
-          </div>
-        </el-tab-pane>
-
-        <el-tab-pane label="批量上传 (Zip)">
-          <div class="upload-panel">
-            <el-upload
-              ref="zipUploadRef"
-              action=""
-              :auto-upload="false"
-              :limit="1"
-              :on-change="handleZipChange"
-              :on-remove="() => zipFile = null"
-              accept=".zip"
-              class="upload-item"
-            >
-              <template #trigger>
-                <el-button type="warning" plain icon="Folder">选择 Zip 包</el-button>
-              </template>
-              <div class="el-upload__tip" v-if="zipFile">已选: {{ zipFile.name }}</div>
-            </el-upload>
-            
-            <el-button type="warning" @click="uploadZip" :loading="uploadingZip" :disabled="!zipFile">
-              一键批量上传
-            </el-button>
-          </div>
-          <el-alert
-            title="注意：批量上传将自动覆盖所有现有测试点"
-            type="warning"
-            :closable="false"
-            show-icon
-            style="margin-top: 16px"
-          >
-            <template #default>
-              <div>1. 系统会自动识别 Zip 包内的 .in 和 .out/.ans 文件并配对。</div>
-              <div>2. 测试点分数将自动均分（例如 10 个测试点，每个 10 分）。</div>
-            </template>
-          </el-alert>
-        </el-tab-pane>
-      </el-tabs>
-      
-      <el-table :data="testcases" v-loading="loadingTestcases" stripe style="margin-top: 16px">
-        <el-table-column prop="order_num" label="序号" width="80" />
-        <el-table-column prop="score" label="分数" width="80" />
-        <el-table-column label="输入文件" min-width="200">
-          <template #default="{ row }">
-            <span class="file-path">{{ row.input_file }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="是否样例" width="100">
-          <template #default="{ row }">
-            <el-tag :type="row.is_sample ? 'success' : 'info'" size="small">
-              {{ row.is_sample ? '是' : '否' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-      </el-table>
-      
-      <div style="margin-top: 16px" v-if="testcases.length > 0">
-        <el-popconfirm title="确定要删除所有测试数据吗？" @confirm="deleteAllTestcases">
-          <template #reference>
-            <el-button type="danger" plain>删除所有测试数据</el-button>
-          </template>
-        </el-popconfirm>
       </div>
+
+      <el-form
+        ref="formRef"
+        :model="form"
+        :rules="rules"
+        label-position="top"
+        v-loading="loading"
+        class="edit-form"
+      >
+        <!-- 1. 基础信息 -->
+        <div class="form-section">
+          <div class="section-header">
+            <h3>基础信息</h3>
+          </div>
+          <el-card shadow="never" class="form-card">
+            <el-form-item label="题目标题" prop="title">
+              <el-input v-model="form.title" placeholder="请输入清晰的题目标题" size="large" />
+            </el-form-item>
+            
+            <el-row :gutter="24">
+              <el-col :span="8">
+                <el-form-item label="难度">
+                  <el-select v-model="form.difficulty" style="width: 100%">
+                    <el-option label="简单" value="easy" />
+                    <el-option label="中等" value="medium" />
+                    <el-option label="困难" value="hard" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :span="16">
+                <el-form-item label="标签">
+                  <el-select
+                    v-model="form.tags"
+                    multiple
+                    filterable
+                    allow-create
+                    default-first-option
+                    placeholder="输入或选择标签"
+                    style="width: 100%"
+                  >
+                    <el-option v-for="tag in commonTags" :key="tag" :label="tag" :value="tag" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+            </el-row>
+
+            <el-row :gutter="24">
+              <el-col :span="12">
+                <el-form-item label="可见性">
+                  <div class="switch-wrapper">
+                    <el-switch v-model="form.is_public" active-text="公开" inactive-text="隐藏" />
+                    <span class="hint-text">隐藏题目仅对管理员或正在进行的比赛可见</span>
+                  </div>
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="文件 IO">
+                  <div class="switch-wrapper">
+                    <el-switch v-model="form.file_io_enabled" @change="handleFileIOToggle" />
+                    <div class="file-inputs" v-if="form.file_io_enabled">
+                      <el-input v-model="form.file_input_name" placeholder="input.in" size="small" />
+                      <span>→</span>
+                      <el-input v-model="form.file_output_name" placeholder="output.out" size="small" />
+                    </div>
+                  </div>
+                </el-form-item>
+              </el-col>
+            </el-row>
+          </el-card>
+        </div>
+
+        <!-- 2. 题目内容 -->
+        <div class="form-section">
+          <div class="section-header">
+            <h3>题目内容</h3>
+            <span class="sub-text">左侧编辑 Markdown，右侧实时预览</span>
+          </div>
+          
+          <el-card shadow="never" class="form-card content-card">
+            <el-form-item label="题目描述" prop="description">
+              <div class="md-row big">
+                <el-input
+                  v-model="form.description"
+                  type="textarea"
+                  placeholder="在此输入题目描述..."
+                  class="md-input"
+                  resize="none"
+                />
+                <div class="md-preview">
+                  <MarkdownPreview :content="form.description" />
+                </div>
+              </div>
+            </el-form-item>
+            
+            <el-form-item label="输入格式">
+              <div class="md-row">
+                <el-input
+                  v-model="form.input_format"
+                  type="textarea"
+                  placeholder="输入格式说明..."
+                  class="md-input"
+                  resize="none"
+                />
+                <div class="md-preview">
+                  <MarkdownPreview :content="form.input_format" />
+                </div>
+              </div>
+            </el-form-item>
+
+            <el-form-item label="输出格式">
+              <div class="md-row">
+                <el-input
+                  v-model="form.output_format"
+                  type="textarea"
+                  placeholder="输出格式说明..."
+                  class="md-input"
+                  resize="none"
+                />
+                <div class="md-preview">
+                  <MarkdownPreview :content="form.output_format" />
+                </div>
+              </div>
+            </el-form-item>
+
+            <el-form-item label="提示 / 数据范围 / 样例解释">
+              <div class="md-row">
+                <el-input
+                  v-model="form.hint"
+                  type="textarea"
+                  placeholder="可选：在此补充数据范围或提示..."
+                  class="md-input"
+                  resize="none"
+                />
+                <div class="md-preview">
+                  <MarkdownPreview :content="form.hint" />
+                </div>
+              </div>
+            </el-form-item>
+          </el-card>
+        </div>
+
+        <!-- 3. 样例数据 -->
+        <div class="form-section">
+          <div class="section-header">
+            <h3>样例数据</h3>
+          </div>
+          <el-card shadow="never" class="form-card">
+            <div v-for="(sample, index) in form.samples" :key="index" class="sample-row">
+              <div class="sample-header">
+                <span>样例 #{{ index + 1 }}</span>
+                <el-button type="danger" link @click="removeSample(index)">删除</el-button>
+              </div>
+              <div class="sample-inputs">
+                <el-input
+                  v-model="sample.input"
+                  type="textarea"
+                  :rows="4"
+                  placeholder="输入数据"
+                  resize="vertical"
+                />
+                <el-input
+                  v-model="sample.output"
+                  type="textarea"
+                  :rows="4"
+                  placeholder="输出数据"
+                  resize="vertical"
+                />
+              </div>
+            </div>
+            <el-button class="add-btn" @click="addSample" plain>+ 添加样例</el-button>
+          </el-card>
+        </div>
+
+        <!-- 4. 评测配置 -->
+        <div class="form-section">
+          <div class="section-header">
+            <h3>评测配置</h3>
+          </div>
+          <el-card shadow="never" class="form-card">
+            <el-row :gutter="24">
+              <el-col :span="12">
+                <el-form-item label="时间限制">
+                  <el-input-number v-model="form.time_limit" :min="100" :max="10000" :step="100" style="width: 100%" />
+                  <div class="unit-text">ms</div>
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="内存限制">
+                  <el-input-number v-model="form.memory_limit" :min="16" :max="1024" :step="16" style="width: 100%" />
+                  <div class="unit-text">MB</div>
+                </el-form-item>
+              </el-col>
+            </el-row>
+
+            <el-divider />
+            
+            <div class="ai-config">
+              <div class="ai-header">
+                <el-checkbox v-model="form.ai_judge_config.enabled">启用 AI 智能辅助判题</el-checkbox>
+              </div>
+              
+              <div class="ai-body" v-if="form.ai_judge_config.enabled">
+                <el-row :gutter="24">
+                  <el-col :span="12">
+                    <el-form-item label="要求算法">
+                      <el-input v-model="form.ai_judge_config.required_algorithm" placeholder="例如：动态规划" />
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="12">
+                    <el-form-item label="要求语言">
+                      <el-select v-model="form.ai_judge_config.required_language" clearable style="width: 100%">
+                        <el-option label="不限" value="" />
+                        <el-option label="C++" value="C++" />
+                        <el-option label="Python" value="Python" />
+                        <el-option label="Java" value="Java" />
+                      </el-select>
+                    </el-form-item>
+                  </el-col>
+                </el-row>
+                
+                <el-form-item label="禁止特性">
+                  <el-select
+                    v-model="form.ai_judge_config.forbidden_features"
+                    multiple
+                    filterable
+                    allow-create
+                    placeholder="例如：STL sort"
+                    style="width: 100%"
+                  >
+                    <el-option label="STL sort" value="STL sort" />
+                    <el-option label="递归" value="递归" />
+                  </el-select>
+                </el-form-item>
+                
+                <el-form-item label="自定义 Prompt">
+                  <el-input
+                    v-model="form.ai_judge_config.custom_prompt"
+                    type="textarea"
+                    :rows="2"
+                    placeholder="给 AI 的额外指令"
+                  />
+                </el-form-item>
+              </div>
+            </div>
+          </el-card>
+        </div>
+
+        <!-- 重点：保存操作栏 -->
+        <div class="form-actions-bar sticky-actions">
+          <el-button type="primary" size="large" :loading="submitting" @click="handleSubmit">
+            {{ isEdit ? '保存所有修改' : '立即创建题目' }}
+          </el-button>
+        </div>
+
+        <!-- 5. 测试数据 (仅编辑时) -->
+        <div class="form-section" v-if="isEdit">
+          <div class="section-header">
+            <h3>测试点管理</h3>
+            <span class="sub-text">上传判题所需的测试用例文件</span>
+          </div>
+          <el-card shadow="never" class="form-card">
+            <el-tabs type="card" class="testcase-tabs">
+              <el-tab-pane label="文件上传">
+                <div class="upload-row">
+                  <div class="upload-group">
+                    <el-upload
+                      ref="inputUploadRef"
+                      action=""
+                      :auto-upload="false"
+                      :limit="1"
+                      :on-change="(f) => inputFile = f.raw"
+                      :on-remove="() => inputFile = null"
+                      :show-file-list="false"
+                    >
+                      <el-button :type="inputFile ? 'success' : 'default'">
+                        {{ inputFile ? inputFile.name : '选择 Input (.in)' }}
+                      </el-button>
+                    </el-upload>
+                    <span class="plus">+</span>
+                    <el-upload
+                      ref="outputUploadRef"
+                      action=""
+                      :auto-upload="false"
+                      :limit="1"
+                      :on-change="(f) => outputFile = f.raw"
+                      :on-remove="() => outputFile = null"
+                      :show-file-list="false"
+                    >
+                      <el-button :type="outputFile ? 'success' : 'default'">
+                        {{ outputFile ? outputFile.name : '选择 Output (.out)' }}
+                      </el-button>
+                    </el-upload>
+                  </div>
+                  
+                  <div class="score-input">
+                    <span>分值:</span>
+                    <el-input-number v-model="testcaseScore" :min="1" :max="100" style="width: 100px" />
+                  </div>
+                  
+                  <el-button type="primary" @click="uploadTestcase" :loading="uploadingTestcase" :disabled="!inputFile || !outputFile">
+                    上传
+                  </el-button>
+                </div>
+              </el-tab-pane>
+              
+              <el-tab-pane label="Zip 批量上传">
+                <div class="upload-row">
+                  <el-upload
+                    ref="zipUploadRef"
+                    action=""
+                    :auto-upload="false"
+                    :limit="1"
+                    :on-change="(f) => zipFile = f.raw"
+                    :on-remove="() => zipFile = null"
+                    :show-file-list="false"
+                  >
+                    <el-button :type="zipFile ? 'success' : 'warning'" plain>
+                      {{ zipFile ? zipFile.name : '选择 Zip 压缩包' }}
+                    </el-button>
+                  </el-upload>
+                  <el-button type="primary" @click="uploadZip" :loading="uploadingZip" :disabled="!zipFile">
+                    一键覆盖上传
+                  </el-button>
+                </div>
+                <div class="zip-tip">
+                  注意：批量上传将<b>删除所有现有测试点</b>。Zip 包内应包含成对的 .in 和 .out 文件。
+                </div>
+              </el-tab-pane>
+            </el-tabs>
+
+            <el-table :data="testcases" stripe border style="margin-top: 20px" size="small">
+              <el-table-column prop="order_num" label="#" width="60" align="center" />
+              <el-table-column prop="score" label="分数" width="80" align="center" />
+              <el-table-column label="输入文件" min-width="200">
+                <template #default="{ row }">
+                  <span class="mono">{{ row.input_file }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="样例" width="80" align="center">
+                <template #default="{ row }">
+                  <el-tag v-if="row.is_sample" size="small">是</el-tag>
+                </template>
+              </el-table-column>
+            </el-table>
+            
+            <div style="margin-top: 16px; text-align: right;" v-if="testcases.length > 0">
+              <el-popconfirm title="确定清空所有测试点？" @confirm="deleteAllTestcases">
+                <template #reference>
+                  <el-button type="danger" text>清空测试点</el-button>
+                </template>
+              </el-popconfirm>
+            </div>
+          </el-card>
+        </div>
+
+      </el-form>
     </div>
   </div>
 </template>
@@ -359,6 +389,7 @@ const form = reactive({
   description: '',
   input_format: '',
   output_format: '',
+  hint: '',
   samples: [{ input: '', output: '' }],
   time_limit: 1000,
   memory_limit: 256,
@@ -379,8 +410,8 @@ const form = reactive({
 })
 
 const rules = {
-  title: [{ required: true, message: '请输入题目标题', trigger: 'blur' }],
-  description: [{ required: true, message: '请输入题目描述', trigger: 'blur' }],
+  title: [{ required: true, message: '请输入标题', trigger: 'blur' }],
+  description: [{ required: true, message: '请输入描述', trigger: 'blur' }],
 }
 
 const commonTags = [
@@ -398,24 +429,11 @@ const outputFile = ref(null)
 const testcaseScore = ref(10)
 const inputUploadRef = ref()
 const outputUploadRef = ref()
-const activeTab = ref('0') // 默认第一个 tab (Element Plus tabs don't need v-model strictly if not controlled, but good practice)
 
 // Zip 上传
 const zipFile = ref(null)
 const uploadingZip = ref(false)
 const zipUploadRef = ref()
-
-function handleInputChange(file) {
-  inputFile.value = file.raw
-}
-
-function handleOutputChange(file) {
-  outputFile.value = file.raw
-}
-
-function handleZipChange(file) {
-  zipFile.value = file.raw
-}
 
 function addSample() {
   form.samples.push({ input: '', output: '' })
@@ -480,7 +498,6 @@ async function handleSubmit() {
   const valid = await formRef.value.validate().catch(() => false)
   if (!valid) return
   
-  // 过滤空样例
   const submitData = { ...form }
   submitData.samples = form.samples.filter(s => s.input || s.output)
 
@@ -494,7 +511,6 @@ async function handleSubmit() {
     submitData.file_output_name = ''
   }
   
-  // 如果没有启用 AI 判题，清空配置
   if (!submitData.ai_judge_config.enabled) {
     submitData.ai_judge_config = null
   }
@@ -517,11 +533,6 @@ async function handleSubmit() {
 }
 
 async function uploadTestcase() {
-  if (!inputFile.value || !outputFile.value) {
-    message.warning('请选择输入和输出文件')
-    return
-  }
-  
   const formData = new FormData()
   formData.append('input', inputFile.value)
   formData.append('output', outputFile.value)
@@ -531,13 +542,8 @@ async function uploadTestcase() {
   try {
     await problemApi.uploadTestcase(route.params.id, formData)
     message.success('上传成功')
-    
-    // 清空选择
     inputFile.value = null
     outputFile.value = null
-    inputUploadRef.value?.clearFiles()
-    outputUploadRef.value?.clearFiles()
-    
     fetchTestcases()
   } catch (e) {
     console.error(e)
@@ -547,8 +553,6 @@ async function uploadTestcase() {
 }
 
 async function uploadZip() {
-  if (!zipFile.value) return
-  
   const formData = new FormData()
   formData.append('zip_file', zipFile.value)
   
@@ -556,9 +560,7 @@ async function uploadZip() {
   try {
     await problemApi.uploadTestcaseZip(route.params.id, formData)
     message.success('批量上传成功')
-    
     zipFile.value = null
-    zipUploadRef.value?.clearFiles()
     fetchTestcases()
   } catch (e) {
     console.error(e)
@@ -584,114 +586,232 @@ onMounted(() => {
 </script>
 
 <style lang="scss" scoped>
+.problem-edit-wrapper {
+  padding: 40px 0;
+  background-color: var(--swiss-bg-base);
+  min-height: 100vh;
+}
+
+/* Fluid Container Override for Editor */
+.problem-edit-wrapper .container {
+  max-width: 96%;
+  min-width: 1000px;
+}
+
 .page-header {
-  margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+}
+
+.page-title {
+  font-size: 28px;
+  color: var(--swiss-text-main);
+  margin: 0;
+}
+
+.form-section {
+  margin-bottom: 40px;
   
-  h2 {
-    margin: 0;
+  .section-header {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 16px;
+    
+    h3 {
+      font-size: 18px;
+      color: var(--swiss-text-main);
+      margin: 0;
+    }
+    
+    .sub-text {
+      font-size: 13px;
+      color: var(--swiss-text-secondary);
+    }
   }
 }
 
-.editor-with-preview {
+.form-card {
+  border: 1px solid var(--swiss-border-light);
+  border-radius: var(--radius-sm);
+}
+
+.switch-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.hint-text {
+  font-size: 12px;
+  color: var(--swiss-text-secondary);
+}
+
+.file-inputs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 12px;
+  
+  .el-input {
+    width: 120px;
+  }
+}
+
+/* Markdown Row - Dual Column */
+.md-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
-  width: 100%;
+  height: 250px; /* Default height */
+  width: 100%; /* 确保占满容器 */
   
-  @media (max-width: 1200px) {
+  &.big {
+    height: 600px; /* Taller for Description */
+  }
+  
+  /* Breakpoint lowered to 768px */
+  @media (max-width: 768px) {
     grid-template-columns: 1fr;
-  }
-  
-  .editor-section {
-    min-width: 0;
-  }
-  
-  .preview-section {
-    border: 1px solid #e4e7ed;
-    border-radius: 4px;
-    overflow: hidden;
+    height: auto;
     
-    &.small {
-      max-height: 150px;
-      
-      .preview-content {
-        max-height: 120px;
-      }
+    /* Stack them instead of hiding preview */
+    .md-preview {
+      height: 300px;
+      margin-top: 12px;
     }
     
-    .preview-header {
-      background: #f5f7fa;
-      padding: 8px 12px;
-      font-size: 12px;
-      color: #909399;
-      border-bottom: 1px solid #e4e7ed;
-    }
-    
-    .preview-content {
-      padding: 12px;
-      max-height: 300px;
-      overflow-y: auto;
-      background: #fff;
+    .md-input textarea {
+      height: 300px !important;
     }
   }
 }
 
-.sample-item {
+.md-input :deep(.el-textarea__inner) {
+  height: 100%;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1.6;
+  padding: 16px;
+  background: #fafafa;
+  border: 1px solid var(--swiss-border-light);
+  border-radius: var(--radius-sm);
+  
+  &:focus {
+    background: #fff;
+    border-color: var(--swiss-primary);
+  }
+}
+
+.md-preview {
+  border: 1px solid var(--swiss-border-light);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  overflow-y: auto;
+  background: #fff;
+  height: 100%; /* 确保高度填满 */
+  width: 100%;  /* 确保宽度填满 */
+  box-sizing: border-box;
+}
+
+/* 强制 Grid 在大屏下始终生效 - 移除了重复定义 */
+.form-actions-bar {
+  display: flex;
+  justify-content: center;
+  margin: 40px 0;
+  
+  .el-button {
+    width: 240px;
+    height: 48px;
+    font-size: 16px;
+  }
+}
+
+/* Sample */
+.sample-row {
+  background: #f9f9f9;
+  border-radius: var(--radius-sm);
+  padding: 16px;
   margin-bottom: 16px;
-  padding: 12px;
-  background: #f5f7fa;
-  border-radius: 4px;
+  border: 1px solid var(--swiss-border-light);
+  
+  .sample-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--swiss-text-secondary);
+  }
   
   .sample-inputs {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 12px;
-    margin-bottom: 8px;
+    gap: 16px;
   }
 }
 
-.unit {
-  margin-left: 8px;
-  color: #909399;
+.add-btn {
+  width: 100%;
+  border-style: dashed;
 }
 
-.hint {
-  margin-left: 12px;
-  color: #909399;
+.unit-text {
+  position: absolute;
+  right: 30px;
+  color: var(--swiss-text-secondary);
   font-size: 12px;
+  pointer-events: none;
 }
 
-.card h3 {
-  margin-bottom: 16px;
+.ai-config {
+  background: #f0f7ff;
+  border: 1px solid #d6e4ff;
+  border-radius: var(--radius-sm);
+  padding: 20px;
+  
+  .ai-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
 }
 
-.upload-panel {
+/* Upload */
+.upload-row {
   display: flex;
   align-items: center;
   gap: 16px;
-  flex-wrap: wrap;
-  padding: 12px 0;
+  padding: 20px 0;
 }
 
-.upload-item {
-  display: inline-flex;
-  flex-direction: column;
+.upload-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  
+  .plus { color: var(--swiss-text-secondary); }
 }
 
 .score-input {
   display: flex;
   align-items: center;
   gap: 8px;
-  
-  .label {
-    font-size: 14px;
-    color: #606266;
-  }
+  margin-left: auto;
+  font-size: 14px;
 }
 
-.file-path {
-  font-family: monospace;
+.zip-tip {
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--swiss-warning);
+}
+
+.mono {
+  font-family: var(--font-mono);
   font-size: 12px;
-  color: #606266;
 }
 </style>

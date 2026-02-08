@@ -11,7 +11,17 @@
         </el-form-item>
 
         <el-form-item label="比赛描述" prop="description">
-          <el-input v-model="form.description" type="textarea" :rows="4" placeholder="可选" />
+          <div class="md-editor">
+            <el-input
+              v-model="form.description"
+              type="textarea"
+              :rows="6"
+              placeholder="支持 Markdown (赛制说明、注意事项等)"
+            />
+            <div class="md-preview" v-if="form.description">
+              <MarkdownPreview :content="form.description" />
+            </div>
+          </div>
         </el-form-item>
 
         <div class="form-row">
@@ -103,6 +113,7 @@ import { message } from '@/utils/message'
 import { adminApi } from '@/api/admin'
 import { contestApi } from '@/api/contest'
 import { problemApi } from '@/api/problem'
+import MarkdownPreview from '@/components/common/MarkdownPreview.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -237,5 +248,17 @@ onMounted(() => {
   justify-content: flex-end;
   gap: 12px;
   margin-top: 16px;
+}
+
+.md-editor {
+  .md-preview {
+    margin-top: 12px;
+    padding: 12px;
+    border: 1px solid #e4e7ed;
+    border-radius: 4px;
+    background-color: #fafafa;
+    max-height: 200px;
+    overflow-y: auto;
+  }
 }
 </style>

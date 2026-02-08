@@ -45,6 +45,7 @@ func (s *ProblemService) Create(req *model.ProblemCreateRequest, createdBy uint)
 		Description:   req.Description,
 		InputFormat:   req.InputFormat,
 		OutputFormat:  req.OutputFormat,
+		Hint:          req.Hint,
 		Samples:       req.Samples,
 		TimeLimit:     req.TimeLimit,
 		MemoryLimit:   req.MemoryLimit,
@@ -64,6 +65,10 @@ func (s *ProblemService) Create(req *model.ProblemCreateRequest, createdBy uint)
 	}
 	if problem.MemoryLimit == 0 {
 		problem.MemoryLimit = 256
+	}
+	if problem.IsPublic == nil {
+		t := true
+		problem.IsPublic = &t
 	}
 
 	if err := s.repo.Create(problem); err != nil {
@@ -92,7 +97,7 @@ func (s *ProblemService) GetByIDWithUser(id uint, userID uint, isAdmin bool) (*m
 	if err != nil {
 		return nil, errors.New("题目不存在")
 	}
-	if !problem.IsPublic && !isAdmin {
+	if (problem.IsPublic == nil || !*problem.IsPublic) && !isAdmin {
 		if !s.canAccessHiddenProblem(problem.ID, userID) {
 			return nil, errors.New("无权限访问该题目")
 		}
@@ -120,6 +125,7 @@ func (s *ProblemService) Update(id uint, req *model.ProblemCreateRequest) (*mode
 	problem.Description = req.Description
 	problem.InputFormat = req.InputFormat
 	problem.OutputFormat = req.OutputFormat
+	problem.Hint = req.Hint
 	problem.Samples = req.Samples
 	problem.TimeLimit = req.TimeLimit
 	problem.MemoryLimit = req.MemoryLimit

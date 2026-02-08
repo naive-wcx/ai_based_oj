@@ -1,101 +1,119 @@
 <template>
-  <div class="swiss-layout">
-    <div class="swiss-header">
-      <h1 class="swiss-title">题目列表</h1>
-      <div class="filter-group">
-        <el-input
-          v-model="filters.keyword"
-          placeholder="搜索题目..."
-          style="width: 200px"
-          @keyup.enter="handleSearch"
-        >
-          <template #prefix>
-            <el-icon><Search /></el-icon>
-          </template>
-        </el-input>
+  <div class="problem-list-wrapper">
+    <div class="container">
+      <div class="page-header">
+        <h1 class="page-title">题目列表</h1>
+        <div class="filter-group">
+          <el-input
+            v-model="filters.keyword"
+            placeholder="搜索题目..."
+            class="search-input"
+            @keyup.enter="handleSearch"
+          >
+            <template #prefix>
+              <el-icon><Search /></el-icon>
+            </template>
+          </el-input>
 
-        <el-select
-          v-model="filters.difficulty"
-          placeholder="难度"
-          clearable
-          style="width: 120px"
-          @change="handleSearch"
-        >
-          <el-option label="简单" value="easy" />
-          <el-option label="中等" value="medium" />
-          <el-option label="困难" value="hard" />
-        </el-select>
+          <el-select
+            v-model="filters.difficulty"
+            placeholder="所有难度"
+            clearable
+            class="filter-select"
+            @change="handleSearch"
+          >
+            <el-option label="简单" value="easy" />
+            <el-option label="中等" value="medium" />
+            <el-option label="困难" value="hard" />
+          </el-select>
+        </div>
       </div>
-    </div>
 
-    <el-table 
-      :data="problems" 
-      v-loading="loading" 
-      class="swiss-table"
-    >
-      <el-table-column prop="id" label="#" width="80" align="center">
-        <template #default="{ row }">
-          <span class="swiss-font-mono" style="color: var(--color-text-secondary)">{{ row.id }}</span>
-        </template>
-      </el-table-column>
-      
-      <el-table-column label="状态" width="60" align="center">
-        <template #default="{ row }">
-          <el-icon v-if="row.has_accepted" style="color: var(--color-success); font-size: 16px;"><Check /></el-icon>
-        </template>
-      </el-table-column>
+      <div class="table-container">
+        <el-table 
+          :data="problems" 
+          v-loading="loading" 
+          class="swiss-table"
+        >
+          <!-- 编号 -->
+          <el-table-column prop="id" label="编号" width="80" align="center" header-align="center">
+            <template #default="{ row }">
+              <span class="id-text">{{ row.id }}</span>
+            </template>
+          </el-table-column>
+          
+          <!-- 状态 -->
+          <el-table-column label="状态" width="80" align="center" header-align="center">
+            <template #default="{ row }">
+               <span v-if="row.has_accepted" class="status-text success">AC</span>
+            </template>
+          </el-table-column>
 
-      <el-table-column label="标题" min-width="400">
-        <template #default="{ row }">
-          <router-link :to="`/problem/${row.id}`" class="problem-link">
-            {{ row.title }}
-            <span v-if="row.has_ai_judge" class="indicator ai" title="AI 判题已启用">AI</span>
-            <span v-if="row.has_file_io" class="indicator file" title="文件 IO">FILE</span>
-          </router-link>
-        </template>
-      </el-table-column>
+          <!-- 标题：强制内容居中 -->
+          <el-table-column label="标题" min-width="400" align="center" header-align="center">
+            <template #default="{ row }">
+              <div class="title-cell">
+                <router-link :to="`/problem/${row.id}`" class="problem-link">
+                  {{ row.title }}
+                </router-link>
+                <div class="badges">
+                  <!-- 新增：隐藏标识 -->
+                  <span v-if="row.is_public === false" class="badge hidden" title="仅管理员或比赛可见">隐藏</span>
+                  <span v-if="row.has_ai_judge" class="badge ai">AI</span>
+                  <span v-if="row.has_file_io" class="badge file">FILE</span>
+                </div>
+              </div>
+            </template>
+          </el-table-column>
 
-      <el-table-column label="标签" min-width="200">
-        <template #default="{ row }">
-          <div class="tags-wrapper">
-            <span v-for="tag in (row.tags || []).slice(0, 3)" :key="tag" class="minimal-tag">
-              {{ tag }}
-            </span>
-          </div>
-        </template>
-      </el-table-column>
+          <!-- 标签：强制内容居中 -->
+          <el-table-column label="标签" min-width="120" align="center" header-align="center">
+            <template #default="{ row }">
+              <div class="tags-wrapper">
+                <span v-for="tag in (row.tags || []).slice(0, 3)" :key="tag" class="text-tag">
+                  #{{ tag }}
+                </span>
+              </div>
+            </template>
+          </el-table-column>
 
-      <el-table-column label="通过率" width="120" align="right">
-        <template #default="{ row }">
-          <span class="swiss-font-mono" style="font-size: 13px;">{{ getAcceptRate(row) }}</span>
-        </template>
-      </el-table-column>
+          <!-- 通过率 -->
+          <el-table-column label="通过率" width="100" align="center" header-align="center">
+            <template #default="{ row }">
+              <span class="rate-text">{{ getAcceptRate(row) }}</span>
+            </template>
+          </el-table-column>
 
-      <el-table-column label="难度" width="100" align="right">
-        <template #default="{ row }">
-          <span :class="['difficulty-dot', row.difficulty]"></span>
-          <span style="font-size: 13px; color: var(--color-text-secondary);">{{ formatDifficulty(row.difficulty) }}</span>
-        </template>
-      </el-table-column>
-    </el-table>
+          <!-- 难度：强制内容居中 -->
+          <el-table-column label="难度" width="100" align="center" header-align="center">
+            <template #default="{ row }">
+              <div class="difficulty-wrapper">
+                <span :class="['difficulty-dot', row.difficulty]"></span>
+                <span class="difficulty-text">{{ formatDifficulty(row.difficulty) }}</span>
+              </div>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
 
-    <div class="swiss-pagination" v-if="pagination.total > 0">
-      <el-pagination
-        v-model:current-page="pagination.page"
-        v-model:page-size="pagination.size"
-        :total="pagination.total"
-        :page-sizes="[20, 50, 100]"
-        layout="prev, pager, next"
-        @size-change="fetchProblems"
-        @current-change="fetchProblems"
-      />
+      <div class="pagination-wrapper" v-if="pagination.total > 0">
+        <el-pagination
+          v-model:current-page="pagination.page"
+          v-model:page-size="pagination.size"
+          :total="pagination.total"
+          :page-sizes="[20, 50, 100]"
+          layout="prev, pager, next"
+          @size-change="fetchProblems"
+          @current-change="fetchProblems"
+        />
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import { Search, Check } from '@element-plus/icons-vue'
+import { Search } from '@element-plus/icons-vue'
 import { problemApi } from '@/api/problem'
 import { message } from '@/utils/message'
 import { useRouter, useRoute } from 'vue-router'
@@ -173,31 +191,97 @@ onMounted(() => {
 </script>
 
 <style lang="scss" scoped>
+.problem-list-wrapper {
+  padding: 40px 0;
+  min-height: 100vh;
+  background-color: var(--swiss-bg-base);
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--swiss-border-light);
+}
+
+.page-title {
+  font-size: 32px;
+  color: var(--swiss-text-main);
+  letter-spacing: -0.02em;
+  margin: 0;
+  line-height: 1.2;
+}
+
 .filter-group {
   display: flex;
-  gap: 24px;
+  gap: 16px;
+}
+
+.search-input {
+  width: 240px;
+}
+
+.filter-select {
+  width: 120px;
+}
+
+.table-container {
+  background: #fff;
+  border: 1px solid var(--swiss-border-light);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.id-text {
+  color: var(--swiss-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.status-text {
+  font-size: 12px;
+  font-weight: 700;
+  &.success { color: var(--swiss-success); }
+}
+
+.title-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center; /* 标题内容居中 */
+  gap: 12px;
 }
 
 .problem-link {
   font-size: 15px;
   font-weight: 500;
-  color: var(--color-text-primary);
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  color: var(--swiss-text-main);
+  text-decoration: none;
+  transition: color 0.2s;
   
   &:hover {
-    color: var(--color-primary);
+    color: var(--swiss-primary);
   }
 }
 
-.indicator {
-  font-size: 9px;
-  padding: 1px 4px;
+.badges {
+  display: flex;
+  gap: 6px;
+}
+
+.badge {
+  font-size: 10px;
+  padding: 2px 6px;
   border-radius: 2px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
+  font-weight: 600;
   text-transform: uppercase;
+  letter-spacing: 0.05em;
+  
+  &.hidden {
+    background: #FEE2E2;
+    color: #DC2626;
+  }
   
   &.ai {
     background: #EEF2FF;
@@ -213,27 +297,52 @@ onMounted(() => {
 .tags-wrapper {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  justify-content: center; /* 标签内容居中 */
+  gap: 8px;
 }
 
-.minimal-tag {
-  font-size: 12px;
-  color: var(--color-text-secondary);
-  background: rgba(0,0,0,0.04);
-  padding: 2px 8px;
-  border-radius: 12px;
+.text-tag {
+  font-size: 13px;
+  color: var(--swiss-text-secondary);
+  cursor: default;
+  transition: color 0.2s;
+  white-space: nowrap;
+  
+  &:hover {
+    color: var(--swiss-text-main);
+  }
+}
+
+.rate-text {
+  color: var(--swiss-text-secondary);
+  font-size: 13px;
+}
+
+.difficulty-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center; /* 难度内容居中 */
+  gap: 8px;
 }
 
 .difficulty-dot {
-  display: inline-block;
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  margin-right: 8px;
-  vertical-align: middle;
   
-  &.easy { background-color: var(--color-success); }
-  &.medium { background-color: var(--color-warning); }
-  &.hard { background-color: var(--color-danger); }
+  &.easy { background-color: var(--swiss-success); }
+  &.medium { background-color: var(--swiss-warning); }
+  &.hard { background-color: var(--swiss-danger); }
+}
+
+.difficulty-text {
+  font-size: 13px;
+  color: var(--swiss-text-main);
+}
+
+.pagination-wrapper {
+  margin-top: 30px;
+  display: flex;
+  justify-content: center;
 }
 </style>

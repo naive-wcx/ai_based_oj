@@ -1,93 +1,106 @@
 <template>
-  <div class="submission-detail-container" v-loading="loading">
-    <template v-if="submission">
-      <div class="page-header">
-        <h1 class="page-title">提交记录 #{{ submission.id }}</h1>
-        <div v-if="isPolling" class="polling-indicator">
-          <el-icon class="is-loading"><Loading /></el-icon>
-          <span>正在评测</span>
+  <div class="submission-detail-wrapper" v-loading="loading">
+    <div class="container" v-if="submission">
+      <!-- 1. 页头：标题与状态 -->
+      <div class="detail-header">
+        <div class="header-left">
+          <router-link :to="`/problem/${submission.problem_id}`" class="back-link">
+            ← 返回题目
+          </router-link>
+          <h1 class="page-title">
+            提交记录 <span class="sub-id">#{{ submission.id }}</span>
+          </h1>
+        </div>
+        <div class="header-right">
+           <div class="status-badge" :class="getStatusClass(submission.status)">
+             {{ statusMap[submission.status]?.label || submission.status }}
+           </div>
         </div>
       </div>
 
-      <!-- 基本信息 -->
-      <el-card shadow="never" class="info-card">
-        <el-descriptions :column="4" border>
-          <el-descriptions-item label="状态" label-align="center" align="center">
-            <el-tag :type="getStatusTagType(submission.status)" effect="light">
-              {{ statusMap[submission.status]?.label || submission.status }}
-            </el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item label="题目" label-align="center" align="center">
-            <router-link :to="`/problem/${submission.problem_id}`" class="problem-link">
-              {{ submission.problem_id }}. {{ submission.problem_title }}
-            </router-link>
-          </el-descriptions-item>
-          <el-descriptions-item label="用户" label-align="center" align="center">
-            {{ submission.username }}
-          </el-descriptions-item>
-          <el-descriptions-item label="语言" label-align="center" align="center">
-            {{ languageLabels[submission.language] || submission.language }}
-          </el-descriptions-item>
-           <el-descriptions-item label="用时" label-align="center" align="center">
-            <span v-if="submission.status !== 'Submitted' && submission.time_used != null">{{ submission.time_used }}ms</span>
-            <span v-else>-</span>
-          </el-descriptions-item>
-          <el-descriptions-item label="内存" label-align="center" align="center">
-            <span v-if="submission.status !== 'Submitted' && submission.memory_used != null">{{ formatMemory(submission.memory_used) }}</span>
-            <span v-else>-</span>
-          </el-descriptions-item>
-          <el-descriptions-item label="分数" label-align="center" align="center">
-             <span :class="submission.status === 'Submitted' ? '' : getScoreClass(submission.score)">
-               {{ submission.status === 'Submitted' ? '-' : (submission.score != null ? submission.score : '-') }}
-             </span>
-          </el-descriptions-item>
-          <el-descriptions-item label="提交时间" label-align="center" align="center">
-            {{ formatTime(submission.created_at) }}
-          </el-descriptions-item>
-        </el-descriptions>
-        <div v-if="submission.final_message" class="final-message">
-          <el-alert :type="submission.status === 'Accepted' ? 'success' : 'warning'" :closable="false">
-            {{ submission.final_message }}
-          </el-alert>
+      <!-- 2. 核心指标仪表盘 -->
+      <div class="stats-dashboard">
+        <div class="stat-card">
+          <div class="stat-label">得分</div>
+          <div class="stat-value score-value" :class="getScoreClass(submission.score)">
+            {{ submission.score != null ? submission.score : '-' }}
+          </div>
         </div>
-      </el-card>
+        <div class="stat-divider"></div>
+        <div class="stat-card">
+          <div class="stat-label">运行时间</div>
+          <div class="stat-value">{{ submission.time_used != null ? submission.time_used + ' ms' : '-' }}</div>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-card">
+          <div class="stat-label">内存占用</div>
+          <div class="stat-value">{{ formatMemory(submission.memory_used) }}</div>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-card">
+          <div class="stat-label">语言</div>
+          <div class="stat-value">{{ languageLabels[submission.language] || submission.language }}</div>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-card">
+          <div class="stat-label">提交者</div>
+          <div class="stat-value">{{ submission.username }}</div>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-card">
+          <div class="stat-label">提交时间</div>
+          <div class="stat-value time-value">{{ formatTime(submission.created_at) }}</div>
+        </div>
+      </div>
 
-      <!-- 测试点结果 -->
-      <el-card shadow="never" class="card-section" v-if="submission.testcase_results?.length">
-        <template #header><h3>测试点结果</h3></template>
-        <TestcaseResults :results="submission.testcase_results" />
-      </el-card>
+      <!-- 3. 最终评测消息 -->
+      <div class="message-banner" v-if="submission.final_message" :class="submission.status === 'Accepted' ? 'success' : 'warning'">
+        <span class="icon">{{ submission.status === 'Accepted' ? '🎉' : '⚠️' }}</span>
+        {{ submission.final_message }}
+      </div>
 
-      <!-- AI 判题结果 -->
-      <el-card shadow="never" class="card-section" v-if="submission.ai_judge_result?.enabled">
-        <template #header><h3>🤖 AI 智能判题结果</h3></template>
+      <!-- 4. 测试点结果 -->
+      <div class="section-block" v-if="submission.testcase_results?.length">
+        <h3 class="section-title">测试点详情</h3>
+        <div class="testcases-container">
+          <TestcaseResults :results="submission.testcase_results" />
+        </div>
+      </div>
+
+      <!-- 5. 编译错误 -->
+      <div class="section-block error-block" v-if="submission.compile_error">
+         <h3 class="section-title text-danger">编译错误</h3>
+         <pre class="error-content">{{ submission.compile_error }}</pre>
+      </div>
+
+      <!-- 6. AI 智能分析 -->
+      <div class="section-block" v-if="submission.ai_judge_result?.enabled">
+        <h3 class="section-title">
+          AI 智能分析
+        </h3>
         <AIJudgeResult :result="submission.ai_judge_result" />
-      </el-card>
+      </div>
 
-      <!-- 编译错误 -->
-      <el-card shadow="never" class="card-section" v-if="submission.compile_error">
-        <template #header><h3>❌ 编译错误</h3></template>
-        <pre class="compile-error">{{ submission.compile_error }}</pre>
-      </el-card>
+      <!-- 7. 源代码 -->
+      <div class="section-block">
+        <h3 class="section-title">源代码</h3>
+        <div class="code-wrapper">
+          <CodeEditor
+            :model-value="submission.code"
+            :language="submission.language"
+            :readonly="true"
+            style="min-height: 300px; font-family: var(--font-mono);"
+          />
+        </div>
+      </div>
 
-      <!-- 代码 -->
-      <el-card shadow="never" class="card-section" v-if="submission.code">
-        <template #header><h3>提交代码</h3></template>
-        <CodeEditor
-          :model-value="submission.code"
-          :language="submission.language"
-          :readonly="true"
-          style="min-height: 300px"
-        />
-      </el-card>
-    </template>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { Loading } from '@element-plus/icons-vue'
 import { submissionApi } from '@/api/submission'
 import TestcaseResults from '@/components/submission/TestcaseResults.vue'
 import AIJudgeResult from '@/components/submission/AIJudgeResult.vue'
@@ -96,7 +109,6 @@ import CodeEditor from '@/components/common/CodeEditor.vue'
 const route = useRoute()
 const loading = ref(true)
 const submission = ref(null)
-const isPolling = ref(false)
 let pollTimer = null
 
 const languageLabels = {
@@ -108,20 +120,20 @@ const languageLabels = {
 }
 
 const statusMap = {
-  'Pending': { label: '等待中', type: 'info' },
-  'Judging': { label: '评测中', type: 'primary' },
-  'Accepted': { label: '通过', type: 'success' },
-  'Submitted': { label: '已提交', type: 'info' },
-  'Wrong Answer': { label: '答案错误', type: 'danger' },
-  'Time Limit Exceeded': { label: '超时', type: 'warning' },
-  'Memory Limit Exceeded': { label: '内存超限', type: 'warning' },
-  'Runtime Error': { label: '运行错误', type: 'danger' },
-  'Compile Error': { label: '编译错误', type: 'danger' },
-  'System Error': { label: '系统错误', type: 'danger' },
+  'Pending': { label: '等待中', class: 'waiting' },
+  'Judging': { label: '评测中', class: 'judging' },
+  'Accepted': { label: 'Accepted', class: 'ac' },
+  'Submitted': { label: '已提交', class: 'waiting' },
+  'Wrong Answer': { label: 'Wrong Answer', class: 'wa' },
+  'Time Limit Exceeded': { label: 'Time Limit Exceeded', class: 'tle' },
+  'Memory Limit Exceeded': { label: 'Memory Limit Exceeded', class: 'mle' },
+  'Runtime Error': { label: 'Runtime Error', class: 're' },
+  'Compile Error': { label: 'Compile Error', class: 'ce' },
+  'System Error': { label: 'System Error', class: 'uqe' },
 }
 
-const getStatusTagType = (status) => {
-  return statusMap[status]?.type || 'info'
+function getStatusClass(status) {
+  return statusMap[status]?.class || 'waiting'
 }
 
 function formatMemory(kb) {
@@ -132,14 +144,14 @@ function formatMemory(kb) {
 
 function formatTime(time) {
   if (!time) return '-'
-  return new Date(time).toLocaleString('zh-CN', { hour12: false })
+  return new Date(time).toLocaleString('zh-CN')
 }
 
 function getScoreClass(score) {
   if (score == null) return ''
-  if (score === 100) return 'score-full'
-  if (score >= 60) return 'score-pass'
-  return 'score-fail'
+  if (score === 100) return 'text-success'
+  if (score >= 60) return 'text-warning'
+  return 'text-danger'
 }
 
 async function fetchSubmission() {
@@ -148,10 +160,8 @@ async function fetchSubmission() {
     submission.value = res.data
     
     if (res.data.status === 'Pending' || res.data.status === 'Judging') {
-      isPolling.value = true
       startPolling()
     } else {
-      isPolling.value = false
       stopPolling()
     }
   } catch (e) {
@@ -183,70 +193,199 @@ onUnmounted(() => {
 </script>
 
 <style lang="scss" scoped>
-.submission-detail-container {
-  padding: 20px;
+.submission-detail-wrapper {
+  padding: 40px 0;
+  background-color: var(--swiss-bg-base);
+  min-height: 100vh;
 }
 
-.page-header {
+/* Header */
+.detail-header {
   display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 20px;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 30px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--swiss-border-light);
+}
+
+.back-link {
+  font-size: 14px;
+  color: var(--swiss-text-secondary);
+  margin-bottom: 8px;
+  display: block;
+  font-weight: 500;
+  transition: color 0.2s;
+  &:hover { color: var(--swiss-primary); }
 }
 
 .page-title {
-  font-size: 24px;
-  font-weight: 600;
-  color: #303133;
-}
-
-.polling-indicator {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--el-color-primary);
-}
-
-.card-section, .info-card {
-  margin-bottom: 20px;
-  border: none;
-  background-color: #ffffff;
-}
-
-.final-message {
-  margin-top: 20px;
-}
-
-.problem-link {
-  color: var(--el-text-color-primary);
-  text-decoration: none;
-  &:hover {
-    color: var(--el-color-primary);
+  font-size: 32px;
+  margin: 0;
+  color: var(--swiss-text-main);
+  letter-spacing: -0.02em;
+  
+  .sub-id {
+    color: var(--swiss-text-secondary);
+    font-weight: 400;
+    font-size: 24px;
+    margin-left: 8px;
   }
 }
 
-.score-full {
-  color: var(--el-color-success);
-  font-weight: bold;
+.status-badge {
+  font-size: 15px;
+  font-weight: 700;
+  padding: 8px 20px;
+  border-radius: var(--radius-xs);
+  letter-spacing: 0.02em;
+  color: #fff;
+  
+  &.ac { background-color: var(--status-ac); }
+  &.wa { background-color: var(--status-wa); }
+  &.tle { background-color: var(--status-tle); }
+  &.mle { background-color: var(--status-mle); }
+  &.re { background-color: var(--status-re); }
+  &.ce { background-color: var(--status-ce); color: #fff; /* Yellow bg, white text might be hard, but let's stick to simple badge */ }
+  &.uqe { background-color: var(--status-uqe); }
+  &.waiting { background-color: var(--status-waiting); color: #fff; }
+  &.judging { background-color: var(--status-judging); }
 }
 
-.score-pass {
-  color: var(--el-color-warning);
+/* Stats Dashboard */
+.stats-dashboard {
+  display: flex;
+  align-items: stretch;
+  background: #fff;
+  border: 1px solid var(--swiss-border-light);
+  border-radius: var(--radius-sm);
+  padding: 24px;
+  margin-bottom: 30px;
+  flex-wrap: wrap;
+  gap: 20px;
 }
 
-.score-fail {
-  color: var(--el-color-danger);
+.stat-card {
+  flex: 1;
+  min-width: 120px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 
-.compile-error {
-  background: #fef0f0;
-  color: #f56c6c;
-  padding: 16px;
-  border-radius: 4px;
-  overflow-x: auto;
-  font-size: 14px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-all;
+.stat-divider {
+  width: 1px;
+  background: var(--swiss-border-light);
+  margin: 4px 0;
+}
+
+.stat-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--swiss-text-secondary);
+  margin-bottom: 8px;
+}
+
+.stat-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--swiss-text-main);
+  
+  &.score-value { font-size: 24px; }
+  
+  &.time-value {
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--swiss-text-secondary);
+    white-space: nowrap;
+  }
+}
+
+.text-success { color: var(--status-ac); }
+.text-warning { color: var(--swiss-warning); }
+.text-danger { color: var(--status-wa); }
+
+/* Message Banner */
+.message-banner {
+  padding: 16px 20px;
+  border-radius: var(--radius-xs);
+  margin-bottom: 30px;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  
+  &.success { background: rgba(82, 196, 26, 0.1); color: var(--status-ac); border: 1px solid rgba(82, 196, 26, 0.2); }
+  &.warning { background: rgba(231, 76, 60, 0.1); color: var(--status-wa); border: 1px solid rgba(231, 76, 60, 0.2); }
+  
+  .icon { font-size: 18px; }
+}
+
+/* Common Section */
+.section-block {
+  margin-bottom: 40px;
+}
+
+.section-title {
+  font-size: 18px;
+  margin-bottom: 16px;
+  color: var(--swiss-text-main);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  
+  &.text-danger { color: var(--status-ce); } /* Compile Error Title Color */
+}
+
+.testcases-container {
+  background: #fff;
+  border: 1px solid var(--swiss-border-light);
+  border-radius: var(--radius-sm);
+  padding: 20px;
+}
+
+.code-wrapper {
+  border: 1px solid var(--swiss-border-light);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  max-width: 100%;
+}
+
+.error-block {
+  .error-content {
+    background: #fff0f0;
+    color: var(--swiss-danger);
+    padding: 20px;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    border: 1px solid rgba(255, 59, 48, 0.2);
+  }
+}
+
+@media (max-width: 768px) {
+  .stats-dashboard {
+    flex-direction: column;
+    gap: 16px;
+  }
+  
+  .stat-divider {
+    display: none;
+  }
+  
+  .stat-card {
+    flex-direction: row;
+    align-items: center;
+    border-bottom: 1px solid var(--swiss-border-light);
+    padding-bottom: 12px;
+    
+    &:last-child { border-bottom: none; padding-bottom: 0; }
+  }
+  
+  .stat-label { margin-bottom: 0; }
 }
 </style>

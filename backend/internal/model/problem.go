@@ -13,6 +13,7 @@ type Problem struct {
 	Description   string        `json:"description" gorm:"type:text;not null"`
 	InputFormat   string        `json:"input_format" gorm:"type:text"`
 	OutputFormat  string        `json:"output_format" gorm:"type:text"`
+	Hint          string        `json:"hint" gorm:"type:text"`
 	Samples       SampleList    `json:"samples" gorm:"type:text"`
 	TimeLimit     int           `json:"time_limit" gorm:"default:1000"`  // ms
 	MemoryLimit   int           `json:"memory_limit" gorm:"default:256"` // MB
@@ -22,7 +23,7 @@ type Problem struct {
 	FileIOEnabled bool          `json:"file_io_enabled" gorm:"default:false"`
 	FileInputName string        `json:"file_input_name" gorm:"size:100"`
 	FileOutputName string       `json:"file_output_name" gorm:"size:100"`
-	IsPublic      bool          `json:"is_public" gorm:"default:true"`
+	IsPublic      *bool         `json:"is_public" gorm:"default:true"`
 	CreatedBy     uint          `json:"created_by"`
 	SubmitCount   int           `json:"submit_count" gorm:"default:0"`
 	AcceptedCount int           `json:"accepted_count" gorm:"default:0"`
@@ -134,6 +135,7 @@ type ProblemCreateRequest struct {
 	Description   string         `json:"description" binding:"required"`
 	InputFormat   string         `json:"input_format"`
 	OutputFormat  string         `json:"output_format"`
+	Hint          string         `json:"hint"`
 	Samples       []Sample       `json:"samples"`
 	TimeLimit     int            `json:"time_limit"`
 	MemoryLimit   int            `json:"memory_limit"`
@@ -143,7 +145,7 @@ type ProblemCreateRequest struct {
 	FileIOEnabled bool           `json:"file_io_enabled"`
 	FileInputName string         `json:"file_input_name"`
 	FileOutputName string        `json:"file_output_name"`
-	IsPublic      bool           `json:"is_public"`
+	IsPublic      *bool          `json:"is_public"`
 }
 
 // ProblemListItem 题目列表项
@@ -158,5 +160,5 @@ type ProblemListItem struct {
 	HasFileIO     bool     `json:"has_file_io"`
 	HasAccepted   bool     `json:"has_accepted"`
 	HasSubmitted  bool     `json:"has_submitted"`
-	IsPublic      bool     `json:"is_public"`
+	IsPublic      *bool    `json:"is_public"`
 }

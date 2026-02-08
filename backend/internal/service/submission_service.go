@@ -38,7 +38,7 @@ func (s *SubmissionService) Submit(req *model.SubmissionCreateRequest, userID ui
 	if err != nil {
 		return nil, errors.New("题目不存在")
 	}
-	if !problem.IsPublic {
+	if (problem.IsPublic == nil || !*problem.IsPublic) {
 		if ok, err := s.canAccessHiddenProblem(problem.ID, userID); err != nil {
 			return nil, errors.New("校验题目权限失败")
 		} else if !ok {

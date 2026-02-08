@@ -1,32 +1,20 @@
 <template>
-  <div class="testcase-results">
-    <div class="results-header">
-      <h4>测试点结果</h4>
-      <div class="results-summary">
-        <span class="passed">✓通过: {{ passedCount }}</span>
-        <span class="total">总计: {{ results.length }}</span>
-        <span class="max-time" v-if="maxTime">最大用时: {{ maxTime }}ms</span>
-      </div>
+  <div class="testcases-grid">
+    <div 
+      v-for="(result, index) in results" 
+      :key="index"
+      class="testcase-dot"
+      :class="getStatusClass(result.status)"
+      :title="`#${index + 1}: ${getStatusLabel(result.status)} (${result.time}ms, ${formatMemory(result.memory)})`"
+    >
+      <span class="dot-id">{{ index + 1 }}</span>
     </div>
-    
-    <div class="results-grid">
-      <div
-        v-for="(result, index) in results"
-        :key="index"
-        :class="['result-item', getStatusClass(result.status)]"
-      >
-        <div class="result-header">
-          <span class="result-id">#{{ result.id || index + 1 }}</span>
-          <span :class="['result-status', getStatusClass(result.status)]">
-            {{ getStatusLabel(result.status) }}
-          </span>
-        </div>
-        <div class="result-info" v-if="result.time || result.memory">
-          <span v-if="result.time" class="time">{{ result.time }}ms</span>
-          <span v-if="result.memory" class="memory">{{ formatMemory(result.memory) }}</span>
-        </div>
-      </div>
-    </div>
+  </div>
+  
+  <div class="testcases-summary">
+    <span>通过: <strong class="text-ac">{{ passedCount }}</strong> / {{ results.length }}</span>
+    <span class="divider">|</span>
+    <span>最大用时: <strong>{{ maxTime }}ms</strong></span>
   </div>
 </template>
 
@@ -37,7 +25,7 @@ const props = defineProps({
   results: {
     type: Array,
     default: () => [],
-  },
+  }
 })
 
 const passedCount = computed(() => {
@@ -50,12 +38,22 @@ const maxTime = computed(() => {
 })
 
 function getStatusClass(status) {
-  if (status === 'Accepted') return 'passed'
-  return 'failed'
+  const map = {
+    'Accepted': 'ac',
+    'Wrong Answer': 'wa',
+    'Time Limit Exceeded': 'tle',
+    'Memory Limit Exceeded': 'mle',
+    'Runtime Error': 're',
+    'Compile Error': 'ce',
+    'System Error': 'uqe',
+    'Pending': 'pending',
+    'Judging': 'judging'
+  }
+  return map[status] || 'pending'
 }
 
 function getStatusLabel(status) {
-  const labels = {
+  const map = {
     'Accepted': '通过',
     'Wrong Answer': '答案错误',
     'Time Limit Exceeded': '超时',
@@ -63,112 +61,69 @@ function getStatusLabel(status) {
     'Runtime Error': '运行错误',
     'Compile Error': '编译错误',
     'System Error': '系统错误',
+    'Pending': '等待中',
+    'Judging': '评测中'
   }
-  return labels[status] || status
+  return map[status] || status
 }
 
 function formatMemory(kb) {
-  if (!kb) return ''
-  if (kb < 1024) return `${kb}KB`
-  return `${(kb / 1024).toFixed(1)}MB`
+  if (!kb) return '-'
+  return kb < 1024 ? `${kb}KB` : `${(kb/1024).toFixed(1)}MB`
 }
 </script>
 
 <style lang="scss" scoped>
-.testcase-results {
-  .results-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 16px;
-    flex-wrap: wrap;
-    gap: 12px;
-    
-    h4 {
-      margin: 0;
-      color: #303133;
-      font-size: 16px;
-    }
-  }
-  
-  .results-summary {
-    display: flex;
-    gap: 16px;
-    font-size: 14px;
-    
-    .passed {
-      color: #67c23a;
-      font-weight: 600;
-    }
-    
-    .total {
-      color: #909399;
-    }
-    
-    .max-time {
-      color: #409eff;
-    }
-  }
-}
-
-.results-grid {
+.testcases-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+  gap: 8px;
+  margin-bottom: 20px;
 }
 
-.result-item {
-  padding: 12px;
-  border-radius: 8px;
-  border: 1px solid;
+.testcase-dot {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: help;
+  transition: all 0.2s;
+  color: white;
   
-  &.passed {
-    background: #f0f9eb;
-    border-color: #e1f3d8;
+  &:hover { 
+    transform: scale(1.05);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
   }
   
-  &.failed {
-    background: #fef0f0;
-    border-color: #fde2e2;
+  &.ac { background-color: var(--status-ac); }
+  &.wa { background-color: var(--status-wa); }
+  &.tle { background-color: var(--status-tle); }
+  &.mle { background-color: var(--status-mle); }
+  &.re { background-color: var(--status-re); }
+  &.ce { background-color: var(--status-ce); }
+  &.uqe { background-color: var(--status-uqe); }
+  &.judging { background-color: var(--status-judging); }
+  &.pending { 
+    background-color: #f0f2f5; 
+    color: var(--swiss-text-secondary);
+    border: 1px solid var(--swiss-border-light);
   }
+}
+
+.testcases-summary {
+  font-size: 14px;
+  color: var(--swiss-text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--swiss-border-light);
   
-  .result-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 8px;
-  }
-  
-  .result-id {
-    font-size: 12px;
-    color: #909399;
-    font-weight: 500;
-  }
-  
-  .result-status {
-    font-size: 13px;
-    font-weight: 600;
-    
-    &.passed {
-      color: #67c23a;
-    }
-    
-    &.failed {
-      color: #f56c6c;
-    }
-  }
-  
-  .result-info {
-    display: flex;
-    gap: 8px;
-    font-size: 12px;
-    color: #606266;
-    
-    .time, .memory {
-      background: rgba(0, 0, 0, 0.05);
-      padding: 2px 6px;
-      border-radius: 4px;
-    }
-  }
+  strong { color: var(--swiss-text-main); font-weight: 600; }
+  .text-ac { color: var(--status-ac); }
+  .divider { color: var(--swiss-border-light); }
 }
 </style>

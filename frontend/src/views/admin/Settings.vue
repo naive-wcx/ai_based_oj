@@ -1,138 +1,102 @@
 <template>
-  <div class="settings-page">
-    <div class="page-header">
-      <h2>系统设置</h2>
-    </div>
-    
-    <div class="card">
-      <h3>
-        <span class="section-icon">🤖</span>
-        AI 判题设置
-      </h3>
-      <p class="section-desc">配置 AI 智能判题功能，支持 DeepSeek 等大模型 API</p>
+  <div class="settings-wrapper">
+    <div class="container">
+      <div class="page-header">
+        <h1 class="page-title">系统设置</h1>
+      </div>
       
-      <el-form
-        ref="formRef"
-        :model="form"
-        label-width="120px"
-        v-loading="loading"
-        class="settings-form"
-      >
-        <el-form-item label="启用 AI 判题">
-          <el-switch v-model="form.enabled" />
-          <span class="hint">开启后，题目可以配置 AI 判题规则</span>
-        </el-form-item>
-        
-        <template v-if="form.enabled">
-          <el-divider />
-          
-          <el-form-item label="API 提供商">
-            <el-select v-model="form.provider" style="width: 200px">
-              <el-option label="DeepSeek" value="deepseek" />
-              <el-option label="OpenAI" value="openai" />
-              <el-option label="其他" value="other" />
-            </el-select>
-          </el-form-item>
-          
-          <el-form-item label="API Key" required>
-            <el-input
-              v-model="form.api_key"
-              type="password"
-              :show-password="!isMaskedKey"
-              placeholder="请输入 API Key"
-              style="width: 400px"
-            />
-            <el-button v-if="isMaskedKey" text class="inline-action" @click="clearApiKey">
-              重新输入
-            </el-button>
-            <div class="form-tip">
-              <div v-if="isMaskedKey">已保存的 API Key 出于安全不会显示，需修改请点击“重新输入”。</div>
-              <template v-if="form.provider === 'deepseek'">
-                前往 <a href="https://platform.deepseek.com/" target="_blank">DeepSeek 开放平台</a> 获取 API Key
-              </template>
-              <template v-else-if="form.provider === 'openai'">
-                前往 <a href="https://platform.openai.com/" target="_blank">OpenAI 平台</a> 获取 API Key
-              </template>
+      <div class="settings-grid">
+        <!-- AI Configuration Card -->
+        <el-card shadow="never" class="settings-card">
+          <template #header>
+            <div class="card-header">
+              <span>AI 判题配置</span>
             </div>
-          </el-form-item>
+          </template>
           
-          <el-form-item label="API 地址">
-            <el-input
-              v-model="form.api_url"
-              placeholder="API 端点地址"
-              style="width: 400px"
-            />
-            <div class="form-tip">
-              DeepSeek 默认: https://api.deepseek.com/v1/chat/completions
+          <el-form
+            ref="formRef"
+            :model="form"
+            label-position="top"
+            v-loading="loading"
+          >
+            <el-form-item label="启用 AI 判题">
+              <el-switch v-model="form.enabled" active-text="已启用" inactive-text="已禁用" />
+            </el-form-item>
+            
+            <template v-if="form.enabled">
+              <div class="config-section">
+                <el-form-item label="服务商预设">
+                  <el-radio-group v-model="form.provider" @change="handleProviderChange">
+                    <el-radio-button label="deepseek">DeepSeek</el-radio-button>
+                    <el-radio-button label="openai">OpenAI</el-radio-button>
+                    <el-radio-button label="moonshot">Kimi (Moonshot)</el-radio-button>
+                    <el-radio-button label="other">自定义</el-radio-button>
+                  </el-radio-group>
+                </el-form-item>
+                
+                <el-row :gutter="20">
+                  <el-col :span="12">
+                     <el-form-item label="模型名称" required>
+                      <el-input v-model="form.model" placeholder="例如: gpt-4, deepseek-chat" />
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="12">
+                     <el-form-item label="超时时间 (秒)">
+                      <el-input-number v-model="form.timeout" :min="10" :max="300" controls-position="right" style="width: 100%" />
+                    </el-form-item>
+                  </el-col>
+                </el-row>
+
+                <el-form-item label="API 接口地址" required>
+                  <el-input v-model="form.api_url" placeholder="例如: https://api.deepseek.com/v1/chat/completions" />
+                </el-form-item>
+
+                <el-form-item label="API Key" required>
+                  <div class="api-key-input">
+                    <el-input
+                      v-model="form.api_key"
+                      type="password"
+                      show-password
+                      placeholder="sk-..."
+                    />
+                  </div>
+                  <div class="form-helper" v-if="isMaskedKey">
+                    Key 已安全保存。如需修改，请直接输入新的 Key。
+                  </div>
+                </el-form-item>
+              </div>
+            </template>
+
+            <div class="form-actions">
+              <el-button type="primary" :loading="saving" @click="handleSave">保存设置</el-button>
+              <el-button :loading="testing" @click="handleTest" :disabled="!canTest" plain>测试连接</el-button>
             </div>
-          </el-form-item>
-          
-          <el-form-item label="模型">
-            <el-input
-              v-model="form.model"
-              placeholder="模型名称"
-              style="width: 200px"
-            />
-            <div class="form-tip">
-              DeepSeek 推荐: deepseek-chat
+          </el-form>
+        </el-card>
+
+        <!-- Documentation Card -->
+        <div class="info-sidebar">
+          <el-card shadow="never" class="info-card">
+            <template #header>功能说明</template>
+            <div class="info-content">
+              <p>AI 判题系统使用大语言模型 (LLM) 分析学生提交的代码，主要用于验证：</p>
+              <ul>
+                <li><strong>算法使用：</strong> 是否按要求使用了特定算法（如动态规划）？</li>
+                <li><strong>语言约束：</strong> 是否使用了被禁止的库函数（如 `std::sort`）？</li>
+              </ul>
+              <h4>费用提示</h4>
+              <p>使用商业 API（如 OpenAI 或 DeepSeek）会产生 Token 费用。DeepSeek-V3 提供了极高的性价比，推荐优先使用。</p>
             </div>
-          </el-form-item>
-          
-          <el-form-item label="超时时间">
-            <el-input-number
-              v-model="form.timeout"
-              :min="10"
-              :max="300"
-              :step="10"
-            />
-            <span class="unit">秒</span>
-          </el-form-item>
-        </template>
-        
-        <el-divider />
-        
-        <el-form-item>
-          <el-button type="primary" :loading="saving" @click="handleSave">
-            保存设置
-          </el-button>
-          <el-button :loading="testing" @click="handleTest" :disabled="!canTest">
-            测试连接
-          </el-button>
-        </el-form-item>
-      </el-form>
-    </div>
-    
-    <div class="card">
-      <h3>
-        <span class="section-icon">ℹ️</span>
-        使用说明
-      </h3>
-      <div class="help-content">
-        <h4>什么是 AI 判题？</h4>
-        <p>AI 判题功能可以分析用户提交的代码，检测是否使用了指定的算法或编程语言特性。例如：</p>
-        <ul>
-          <li>要求使用"动态规划"算法，但用户使用了"暴力枚举" → 判定为不通过</li>
-          <li>禁止使用 STL sort 函数，但用户使用了 → 判定为不通过</li>
-          <li>要求使用 C++ 语言 → 自动检测代码语言</li>
-        </ul>
-        
-        <h4>如何使用？</h4>
-        <ol>
-          <li>在此页面配置 AI API（推荐使用 DeepSeek，性价比高）</li>
-          <li>创建/编辑题目时，开启"AI 判题"选项</li>
-          <li>设置算法要求、语言要求等规则</li>
-          <li>用户提交代码后，系统会自动调用 AI 分析</li>
-        </ol>
-        
-        <h4>费用说明</h4>
-        <p>AI 判题会调用外部 API，会产生一定费用。DeepSeek API 价格约为 ¥1/百万 tokens，一次判题约消耗 1000-2000 tokens。</p>
+          </el-card>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { message } from '@/utils/message'
 import { adminApi } from '@/api/admin'
 
@@ -144,16 +108,35 @@ const form = reactive({
   enabled: false,
   provider: 'deepseek',
   api_key: '',
-  api_url: 'https://api.deepseek.com/v1/chat/completions',
-  model: 'deepseek-chat',
+  api_url: '',
+  model: '',
   timeout: 60,
 })
 
 const isMaskedKey = computed(() => form.api_key === '********')
 const canTest = computed(() => form.enabled && !!form.api_key)
 
-function clearApiKey() {
-  form.api_key = ''
+// Preset Configurations
+const presets = {
+  deepseek: {
+    api_url: 'https://api.deepseek.com/v1/chat/completions',
+    model: 'deepseek-chat',
+  },
+  openai: {
+    api_url: 'https://api.openai.com/v1/chat/completions',
+    model: 'gpt-4o',
+  },
+  moonshot: {
+    api_url: 'https://api.moonshot.cn/v1/chat/completions',
+    model: 'moonshot-v1-8k',
+  }
+}
+
+function handleProviderChange(val) {
+  if (presets[val]) {
+    form.api_url = presets[val].api_url
+    form.model = presets[val].model
+  }
 }
 
 async function fetchSettings() {
@@ -172,7 +155,7 @@ async function handleSave() {
   saving.value = true
   try {
     await adminApi.updateAISettings(form)
-    message.success('设置已保存')
+    message.success('设置保存成功')
   } catch (e) {
     console.error(e)
   } finally {
@@ -183,8 +166,8 @@ async function handleSave() {
 async function handleTest() {
   testing.value = true
   try {
-    const res = await adminApi.testAIConnection()
-    message.success('连接成功！配置有效')
+    await adminApi.testAIConnection()
+    message.success('连接测试成功！')
   } catch (e) {
     console.error(e)
   } finally {
@@ -198,82 +181,87 @@ onMounted(() => {
 </script>
 
 <style lang="scss" scoped>
+.settings-wrapper {
+  padding: 40px 0;
+  min-height: 100vh;
+  background-color: var(--swiss-bg-base);
+}
+
 .page-header {
-  margin-bottom: 20px;
-  
-  h2 {
-    margin: 0;
-  }
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--swiss-border-light);
 }
 
-.card {
-  h3 {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 8px;
-    font-size: 18px;
-    
-    .section-icon {
-      font-size: 24px;
-    }
-  }
-  
-  .section-desc {
-    color: #909399;
-    margin-bottom: 20px;
-  }
+.page-title {
+  font-size: 32px;
+  color: var(--swiss-text-main);
+  letter-spacing: -0.02em;
+  margin: 0;
 }
 
-.settings-form {
-  max-width: 600px;
+.settings-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 30px;
 }
 
-.hint {
-  margin-left: 12px;
-  color: #909399;
-  font-size: 13px;
+.settings-card {
+  background: #fff;
 }
 
-.unit {
-  margin-left: 8px;
-  color: #909399;
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
 }
 
-.form-tip {
-  margin-top: 4px;
+.config-section {
+  background: var(--swiss-bg-alt);
+  padding: 24px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 24px;
+  border: 1px solid var(--swiss-border-light);
+}
+
+.form-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.form-helper {
   font-size: 12px;
-  color: #909399;
-  
-  a {
-    color: #409eff;
-  }
+  color: var(--swiss-text-secondary);
+  margin-top: 6px;
 }
 
-.inline-action {
-  margin-left: 8px;
-}
-
-.help-content {
-  line-height: 1.8;
-  color: #606266;
+.info-content {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--swiss-text-secondary);
   
-  h4 {
-    margin: 20px 0 8px;
-    color: #303133;
-    
-    &:first-child {
-      margin-top: 0;
-    }
-  }
-  
-  ul, ol {
+  ul {
     padding-left: 20px;
-    margin: 8px 0;
   }
   
   li {
-    margin: 4px 0;
+    margin-bottom: 8px;
+  }
+  
+  h4 {
+    margin-top: 20px;
+    margin-bottom: 8px;
+    color: var(--swiss-text-main);
+  }
+}
+
+@media (max-width: 900px) {
+  .settings-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

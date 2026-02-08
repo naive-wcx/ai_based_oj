@@ -148,6 +148,7 @@ onMounted(() => {
 <style lang="scss" scoped>
 .home-container {
   background-color: #f7f8fa;
+  min-height: calc(100vh - 64px);
 }
 
 .hero {
@@ -193,8 +194,14 @@ onMounted(() => {
   border-radius: 12px;
   padding: 24px;
   height: 100%;
+  transition: transform 0.3s ease;
+  
+  &:hover {
+    transform: translateY(-5px);
+  }
+
   .feature-icon {
-    color: #409eff;
+    color: var(--el-color-primary);
     margin-bottom: 20px;
   }
   .feature-title {
