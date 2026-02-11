@@ -14,6 +14,8 @@
 - **自助修改密码**：用户可在个人中心修改密码
 - **文件操作题目**：可要求从指定文件读入并输出到指定文件
 - **隐藏题可见性**：隐藏题仅对已开赛的参赛用户可见，赛后参赛用户仍可访问
+- **UI 体系升级**：采用 Swiss 风格重构，统一状态色、表格对齐规范与后台编辑体验
+- **OI 比赛遮罩机制**：进行中的 OI 比赛对普通用户隐藏详细评测信息，仅显示 `Submitted`
 
 ### 1.3 部署环境
 - **开发环境**：Windows 主机 / WSL
@@ -28,17 +30,18 @@
 ### 2.1 后端
 | 组件 | 技术选型 | 说明 |
 |------|---------|------|
-| Web 框架 | **Go + Gin** 或 **Python + FastAPI** | 推荐 Go，内存占用低、并发性能好 |
-| 数据库 | **SQLite** 或 **PostgreSQL** | 小规模用 SQLite，稍大用 PostgreSQL |
-| 缓存 | **Redis**（可选） | 如资源紧张可不用，用内存缓存替代 |
-| 消息队列 | **简单文件队列** 或 **Redis List** | 用于判题任务调度 |
+| Web 框架 | **Go + Gin** | 当前实现 |
+| 数据库 | **SQLite + GORM** | 当前实现 |
+| 判题队列 | **内存队列（channel）** | `judge/queue` |
+| 定时维护 | **后台协程 + ticker** | 赛后统计同步、启动全量修复 |
 
 ### 2.2 前端
 | 组件 | 技术选型 | 说明 |
 |------|---------|------|
-| 框架 | **Vue 3 + Vite** | 轻量、构建快 |
-| UI 库 | **Element Plus** 或 **Naive UI** | 提供完整组件 |
-| 代码编辑器 | **Monaco Editor** 或 **CodeMirror 6** | 支持语法高亮 |
+| 框架 | **Vue 3 + Vite** | 当前实现 |
+| UI 库 | **Element Plus** | 当前实现 |
+| 代码编辑器 | **Monaco Editor** | 题目页与提交详情使用 |
+| 布局组件 | **splitpanes** | 题面/代码分屏 |
 
 ### 2.3 判题沙箱
 | 组件 | 技术选型 | 说明 |
@@ -122,8 +125,9 @@ AI：DeepSeek API
       ▼                                ▼
 ┌─────────────────────────────────────────────────────────────┐
 │ 4. 综合结果                                                  │
-│    - 如果 AI 判定不符合要求 → Wrong Answer（附带测试点结果）  │
-│    - 如果 AI 判定符合要求 → 返回传统评测结果                  │
+│    - 传统评测未通过 → 返回传统评测结果                        │
+│    - 传统评测通过且 AI 未通过：严格模式 -> WA；非严格仅提示    │
+│    - AI 未通过时最终分数封顶 50                               │
 └─────────────────────────────────────────────────────────────┘
       │
       ▼
@@ -144,6 +148,7 @@ oj-system/
 │   ├── cmd/                 # 入口
 │   │   └── server/
 │   │       └── main.go
+│   ├── configs/             # 配置文件
 │   ├── internal/
 │   │   ├── config/          # 配置管理
 │   │   ├── handler/         # HTTP 处理器
@@ -156,8 +161,6 @@ oj-system/
 │   │   │   ├── ai/          # AI 判题
 │   │   │   └── queue/       # 判题队列
 │   │   └── utils/           # 工具函数
-│   ├── pkg/                 # 可复用包
-│   ├── configs/             # 配置文件
 │   └── go.mod
 │
 ├── frontend/                # 前端项目
@@ -167,17 +170,13 @@ oj-system/
 │   │   ├── views/           # 页面
 │   │   ├── stores/          # 状态管理
 │   │   ├── router/          # 路由
-│   │   └── utils/           # 工具函数
-│   ├── public/
+│   │   ├── utils/           # 工具函数
+│   │   └── assets/          # 静态资源
 │   └── package.json
 │
-├── judger/                  # 判题沙箱（可独立部署）
-│   ├── sandbox/
-│   └── languages/           # 各语言编译运行配置
-│
 ├── deploy/                  # 部署相关
-│   ├── docker/
 │   ├── nginx/
+│   ├── systemd/
 │   └── scripts/
 │
 ├── data/                    # 数据目录（运行时）
@@ -229,6 +228,9 @@ oj-system/
 | PUT | `/:id` | 更新题目 | 管理员 |
 | DELETE | `/:id` | 删除题目 | 管理员 |
 | POST | `/:id/testcase` | 上传测试数据 | 管理员 |
+| POST | `/:id/testcase/zip` | Zip 批量上传测试数据 | 管理员 |
+| GET | `/:id/testcases` | 获取测试点列表 | 管理员 |
+| DELETE | `/:id/testcases` | 清空测试点 | 管理员 |
 
 **隐藏题可见性**：隐藏题仅对管理员或比赛开始后的参赛用户可见，赛后参赛用户仍可访问。
 
@@ -240,6 +242,7 @@ oj-system/
     "description": "题目描述（支持 Markdown）",
     "input_format": "输入格式说明",
     "output_format": "输出格式说明",
+    "hint": "提示（可选）",
     "samples": [
         {
             "input": "1 2\n3 4",
@@ -273,8 +276,12 @@ oj-system/
 |------|------|------|------|
 | POST | `/` | 提交代码 | 登录 |
 | GET | `/:id` | 获取提交详情 | 登录 |
-| GET | `/list` | 获取提交列表 | 公开 |
+| GET | `/list` | 获取提交列表 | 登录 |
 | GET | `/my` | 获取我的提交 | 登录 |
+
+**说明**：
+- 管理员可查看所有提交；普通用户仅可查看自己的提交。
+- 进行中的 OI 比赛中，普通用户看到的相关提交会被遮罩为 `Submitted`，分数与详细评测信息隐藏。
 
 **提交请求**
 ```json
@@ -293,7 +300,7 @@ POST /api/v1/submission
     "problem_id": 1,
     "user_id": 1,
     "language": "cpp",
-    "status": "Wrong Answer",   // Accepted, Wrong Answer, TLE, MLE, RE, CE, Pending, Judging
+    "status": "Wrong Answer",   // Accepted, Wrong Answer, TLE, MLE, RE, CE, Pending, Judging, Submitted
     "time_used": 15,            // 最大运行时间 ms
     "memory_used": 1024,        // 最大内存使用 KB
     "created_at": "2025-01-28T10:00:00Z",
@@ -329,7 +336,6 @@ POST /api/v1/submission
 | 方法 | 路径 | 说明 | 权限 |
 |------|------|------|------|
 | GET | `/` | 获取排行榜 | 公开 |
-| GET | `/problem/:id` | 获取题目排行 | 公开 |
 
 ### 5.5 比赛模块 `/api/v1/contest`
 
@@ -359,7 +365,8 @@ POST /api/v1/submission
 ```
 
 **说明**：
-- `has_accepted` 仅统计比赛开始后（且在比赛时间范围内）的通过记录
+- `has_accepted` 仅在以下情况展示：管理员、IOI 赛制、或比赛已结束
+- `has_submitted` 表示是否在比赛时间范围内提交过该题
 - `my_total` 为当前用户总分：IOI 赛制比赛进行中可见，OI 赛制需比赛结束后可见
 - 排名与总分均按每题最后一次提交得分汇总（IOI 赛制同样取最后一次提交）
 
@@ -393,8 +400,9 @@ POST /api/v1/submission
 | GET | `/contests/:id/leaderboard` | 比赛排行榜（管理员） | 管理员 |
 | GET | `/contests/:id/export` | 导出比赛成绩 | 管理员 |
 | POST | `/contests/:id/refresh` | 刷新比赛统计（赛后同步） | 管理员 |
-| GET | `/statistics` | 系统统计 | 管理员 |
-| POST | `/rejudge/:id` | 重新判题 | 管理员 |
+| GET | `/settings/ai` | 获取 AI 设置 | 管理员 |
+| PUT | `/settings/ai` | 更新 AI 设置 | 管理员 |
+| POST | `/settings/ai/test` | 测试 AI 连接 | 管理员 |
 
 **创建用户请求**
 ```json
@@ -603,6 +611,7 @@ CREATE TABLE users (
     role VARCHAR(20) DEFAULT 'user',        -- user, admin
     `group` VARCHAR(50),
     solved_count INTEGER DEFAULT 0,
+    accepted_count INTEGER DEFAULT 0,
     submit_count INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -617,6 +626,7 @@ CREATE TABLE problems (
     description TEXT NOT NULL,
     input_format TEXT,
     output_format TEXT,
+    hint TEXT,
     samples TEXT,                           -- JSON 格式
     time_limit INTEGER DEFAULT 1000,        -- ms
     memory_limit INTEGER DEFAULT 256,       -- MB
@@ -624,8 +634,10 @@ CREATE TABLE problems (
     tags TEXT,                              -- JSON 数组
     
     -- AI 判题配置
-    ai_judge_enabled BOOLEAN DEFAULT FALSE,
     ai_judge_config TEXT,                   -- JSON 格式
+    file_io_enabled BOOLEAN DEFAULT FALSE,
+    file_input_name VARCHAR(100),
+    file_output_name VARCHAR(100),
     
     is_public BOOLEAN DEFAULT TRUE,
     created_by INTEGER,
@@ -672,6 +684,7 @@ CREATE TABLE submissions (
     
     -- 编译错误信息
     compile_error TEXT,
+    final_message TEXT,
     
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     
@@ -684,7 +697,7 @@ CREATE INDEX idx_submissions_problem ON submissions(problem_id);
 CREATE INDEX idx_submissions_status ON submissions(status);
 ```
 
-### 7.6 比赛表 `contests`
+### 7.5 比赛表 `contests`
 ```sql
 CREATE TABLE contests (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -696,20 +709,10 @@ CREATE TABLE contests (
     problem_ids TEXT,                     -- JSON 列表
     allowed_users TEXT,                   -- JSON 列表
     allowed_groups TEXT,                  -- JSON 列表
+    is_stats_synced BOOLEAN DEFAULT FALSE,
     created_by INTEGER,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-### 7.5 题目统计表 `problem_statistics`
-```sql
-CREATE TABLE problem_statistics (
-    problem_id INTEGER PRIMARY KEY,
-    submit_count INTEGER DEFAULT 0,
-    accepted_count INTEGER DEFAULT 0,
-    
-    FOREIGN KEY (problem_id) REFERENCES problems(id)
 );
 ```
 
@@ -724,10 +727,10 @@ CREATE TABLE problem_statistics (
 | 首页 | `/` | 系统介绍、公告 |
 | 题目列表 | `/problems` | 题目列表、筛选、搜索 |
 | 题目详情 | `/problem/:id` | 题目内容、代码提交 |
-| 比赛列表 | `/contests` | 比赛列表 |
-| 比赛详情 | `/contest/:id` | 比赛详情、题目列表 |
-| 提交列表 | `/submissions` | 所有提交记录 |
-| 提交详情 | `/submission/:id` | 提交结果、AI 分析详情 |
+| 比赛列表 | `/contests` | 比赛列表（需登录） |
+| 比赛详情 | `/contest/:id` | 比赛详情、题目列表（需登录） |
+| 提交列表 | `/submissions` | 提交记录（需登录） |
+| 提交详情 | `/submission/:id` | 提交结果、AI 分析详情（需登录） |
 | 排行榜 | `/rank` | 用户排名 |
 | 个人中心 | `/profile` | 个人信息、提交统计 |
 | 登录 | `/login` | 用户登录 |
@@ -740,26 +743,19 @@ components/
 ├── common/
 │   ├── Navbar.vue           # 导航栏
 │   ├── Footer.vue           # 页脚
-│   ├── Pagination.vue       # 分页
-│   └── Loading.vue          # 加载状态
+│   ├── MarkdownPreview.vue  # Markdown + LaTeX 渲染
+│   └── CodeEditor.vue       # Monaco 编辑器封装
 ├── problem/
-│   ├── ProblemList.vue      # 题目列表
-│   ├── ProblemDetail.vue    # 题目详情
-│   ├── ProblemTag.vue       # 题目标签
+│   ├── StatusBadge.vue      # 题目状态标识
 │   └── DifficultyBadge.vue  # 难度标签
 ├── submission/
-│   ├── CodeEditor.vue       # 代码编辑器
-│   ├── SubmitPanel.vue      # 提交面板
-│   ├── ResultDisplay.vue    # 结果展示
-│   ├── TestcaseResult.vue   # 测试点结果
+│   ├── TestcaseResults.vue  # 测试点结果
 │   └── AIJudgeResult.vue    # AI 判题结果展示
-├── user/
-│   ├── LoginForm.vue        # 登录表单
-│   └── UserProfile.vue      # 用户资料
-└── admin/
-    ├── ProblemForm.vue      # 题目编辑表单
-    ├── AIConfigForm.vue     # AI 判题配置表单
-    └── TestcaseUpload.vue   # 测试数据上传
+└── views/
+    ├── problem/ProblemDetail.vue   # 题面/代码分屏
+    ├── submission/SubmissionDetail.vue # 评测仪表盘
+    ├── contest/ContestDetail.vue   # 比赛详情与管理员排行榜
+    └── admin/ProblemEdit.vue       # 双栏 Markdown 编辑 + 测试点管理
 ```
 
 ---
@@ -1125,6 +1121,6 @@ find $BACKUP_DIR -name "*.tar.gz" -mtime +7 -delete
 
 ---
 
-*文档版本：v1.0*
+*文档版本：v1.1*
 *创建日期：2025-01-28*
-*最后更新：2025-01-28*
+*最后更新：2026-02-11*

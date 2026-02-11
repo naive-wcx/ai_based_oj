@@ -35,20 +35,30 @@ OJ/
 │       │   ├── user.go              # 用户模型
 │       │   ├── problem.go           # 题目模型
 │       │   ├── submission.go        # 提交模型
+│       │   ├── contest.go           # 比赛模型
+│       │   ├── setting.go           # 系统设置模型
 │       │   └── response.go          # 响应结构
 │       ├── repository/
 │       │   ├── database.go          # 数据库初始化
 │       │   ├── user_repo.go         # 用户数据访问
 │       │   ├── problem_repo.go      # 题目数据访问
-│       │   └── submission_repo.go   # 提交数据访问
+│       │   ├── submission_repo.go   # 提交数据访问
+│       │   ├── contest_repo.go      # 比赛数据访问
+│       │   └── setting_repo.go      # 设置数据访问
 │       ├── service/
 │       │   ├── user_service.go      # 用户业务逻辑
 │       │   ├── problem_service.go   # 题目业务逻辑
-│       │   └── submission_service.go# 提交业务逻辑
+│       │   ├── submission_service.go# 提交业务逻辑
+│       │   ├── contest_service.go   # 比赛业务逻辑
+│       │   ├── setting_service.go   # 设置业务逻辑
+│       │   └── maintenance_service.go # 统计维护任务
 │       ├── handler/
 │       │   ├── user_handler.go      # 用户 HTTP 处理
 │       │   ├── problem_handler.go   # 题目 HTTP 处理
 │       │   ├── submission_handler.go# 提交 HTTP 处理
+│       │   ├── contest_handler.go   # 比赛 HTTP 处理
+│       │   ├── setting_handler.go   # 设置 HTTP 处理
+│       │   ├── statistics_handler.go# 公开统计 HTTP 处理
 │       │   └── utils.go             # 处理器工具函数
 │       ├── middleware/
 │       │   ├── auth.go              # JWT 认证中间件
@@ -129,6 +139,7 @@ type User struct {
     Role         string    `json:"role"`       // "user" | "admin"
     Group        string    `json:"group"`
     SolvedCount  int       `json:"solved_count"`
+    AcceptedCount int      `json:"accepted_count"`
     SubmitCount  int       `json:"submit_count"`
     CreatedAt    time.Time `json:"created_at"`
     UpdatedAt    time.Time `json:"updated_at"`
@@ -153,6 +164,7 @@ type Problem struct {
     Description   string         `json:"description"`
     InputFormat   string         `json:"input_format"`
     OutputFormat  string         `json:"output_format"`
+    Hint          string         `json:"hint"`
     Samples       SampleList     `json:"samples"`       // JSON 序列化
     TimeLimit     int            `json:"time_limit"`    // 毫秒
     MemoryLimit   int            `json:"memory_limit"`  // MB
@@ -162,7 +174,7 @@ type Problem struct {
     FileIOEnabled bool           `json:"file_io_enabled"`
     FileInputName string         `json:"file_input_name"`
     FileOutputName string        `json:"file_output_name"`
-    IsPublic      bool           `json:"is_public"`
+    IsPublic      *bool          `json:"is_public"`
     CreatedBy     uint           `json:"created_by"`
     SubmitCount   int            `json:"submit_count"`
     AcceptedCount int            `json:"accepted_count"`
@@ -220,6 +232,8 @@ type Submission struct {
     CompileError    string             `json:"compile_error"`
     FinalMessage    string             `json:"final_message"`
     CreatedAt       time.Time          `json:"created_at"`
+    ProblemTitle    string             `json:"problem_title"`
+    Username        string             `json:"username"`
 }
 
 type TestcaseResult struct {
@@ -236,8 +250,8 @@ type AIJudgeResult struct {
     AlgorithmDetected string          `json:"algorithm_detected,omitempty"`
     LanguageCheck     string          `json:"language_check,omitempty"`
     Reason            string          `json:"reason,omitempty"`
+    Summary           string          `json:"summary,omitempty"`
     Details           *AIJudgeDetails `json:"details,omitempty"`
-    RawResponse       string          `json:"raw_response,omitempty"`
 }
 ```
 
@@ -280,7 +294,7 @@ const (
 | `InitDatabase(cfg *DatabaseConfig) error` | 初始化数据库连接，执行自动迁移 |
 | `GetDB() *gorm.DB` | 获取数据库实例 |
 
-**自动迁移的表**: `users`, `problems`, `testcases`, `submissions`, `settings`
+**自动迁移的表**: `users`, `contests`, `problems`, `testcases`, `submissions`, `settings`
 
 #### 2.3.2 用户仓库 (`user_repo.go`)
 
@@ -439,7 +453,7 @@ func NewSubmissionService() *SubmissionService
 |------|------|
 | `Submit(req *SubmissionCreateRequest, userID uint) (*Submission, error)` | 提交代码 |
 | `GetByID(id uint, userID uint, isAdmin bool) (*Submission, error)` | 获取提交详情（非管理员仅能查看本人） |
-| `List(page, size int, problemID, userID uint, status string) (*PageData, error)` | 获取提交列表 |
+| `List(page, size int, problemID, filterUserID uint, status string, viewerID uint, isAdmin bool) (*PageData, error)` | 获取提交列表（支持权限过滤与比赛期遮罩） |
 | `UpdateResult(submission *Submission) error` | 更新判题结果 |
 | `GetPendingSubmissions(limit int) ([]Submission, error)` | 获取待判题提交 |
 
@@ -693,6 +707,7 @@ type Claims struct {
         "description": "给定一个整数数组...",
         "input_format": "第一行输入...",
         "output_format": "输出...",
+        "hint": "可选提示信息",
         "samples": [
             {"input": "1 2\n3 4", "output": "3\n7"}
         ],
@@ -700,6 +715,9 @@ type Claims struct {
         "memory_limit": 256,
         "difficulty": "easy",
         "tags": ["数组", "哈希表"],
+        "file_io_enabled": false,
+        "file_input_name": "",
+        "file_output_name": "",
         "ai_judge_config": {
             "enabled": true,
             "required_algorithm": "哈希表",
@@ -725,6 +743,7 @@ type Claims struct {
     "description": "题目描述（支持 Markdown）",
     "input_format": "输入格式",
     "output_format": "输出格式",
+    "hint": "可选提示",
     "samples": [
         {"input": "1 2", "output": "3"}
     ],
@@ -779,6 +798,23 @@ type Claims struct {
 
 ---
 
+#### POST `/:id/testcase/zip` - 批量上传测试用例（管理员）
+
+**认证**: 需要 Bearer Token + 管理员权限
+
+**请求类型**: `multipart/form-data`
+
+**表单字段**:
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `zip_file` | file | Zip 压缩包（包含成对的 `.in` + `.out/.ans`） |
+
+**说明**:
+- 该操作会覆盖原有测试点（先删除再重建）。
+- 会按文件名中的数字顺序生成测试点序号并自动分配分值总和 100。
+
+---
+
 #### GET `/:id/testcases` - 获取测试用例列表（管理员）
 
 **认证**: 需要 Bearer Token + 管理员权限
@@ -801,6 +837,12 @@ type Claims struct {
     ]
 }
 ```
+
+---
+
+#### DELETE `/:id/testcases` - 删除所有测试用例（管理员）
+
+**认证**: 需要 Bearer Token + 管理员权限
 
 ---
 
@@ -842,6 +884,8 @@ type Claims struct {
 #### GET `/:id` - 获取提交详情
 
 **认证**: 需要 Bearer Token（管理员可查看所有，普通用户仅能查看本人）
+**说明**:
+- 进行中的 OI 比赛内，普通用户查看本人提交时会被遮罩为 `Submitted`，并隐藏分数、测试点、AI 结果与编译信息；管理员不受影响。
 
 **成功响应** (200):
 ```json
@@ -887,6 +931,8 @@ type Claims struct {
 #### GET `/list` - 获取提交列表
 
 **认证**: 需要 Bearer Token（管理员可查看所有，普通用户仅能查看本人）
+**说明**:
+- 进行中的 OI 比赛内，普通用户列表中的相关提交会显示为 `Submitted`，`score/time_used/memory_used` 被置为 0；管理员不受影响。
 
 **查询参数**:
 | 参数 | 类型 | 说明 |
@@ -979,7 +1025,8 @@ type Claims struct {
 
 **认证**: 需要 Bearer Token（且在比赛允许名单/分组内）
 **说明**:
-- `has_accepted` 仅统计比赛开始后（且在比赛时间范围内）的通过记录
+- `has_accepted` 仅在以下情况展示：管理员、IOI 赛制、或比赛已结束；进行中的 OI 对普通用户不展示通过信息
+- `has_submitted` 表示在比赛时间范围内是否提交过该题
 - `my_total` 为当前用户总分：IOI 赛制比赛进行中可见，OI 赛制需比赛结束后可见
 
 **成功响应** (200):
@@ -999,7 +1046,7 @@ type Claims struct {
             "allowed_groups": ["ClassA"]
         },
         "problems": [
-            {"id": 1, "title": "A+B", "difficulty": "easy", "has_accepted": true}
+            {"id": 1, "title": "A+B", "difficulty": "easy", "has_accepted": false, "has_submitted": true}
         ],
         "my_total": 180
     }
@@ -1141,6 +1188,12 @@ type Claims struct {
 
 **认证**: 需要 Bearer Token + 管理员权限
 
+#### POST `/contests/:id/refresh` - 刷新比赛统计（管理员）
+
+**认证**: 需要 Bearer Token + 管理员权限
+
+**说明**: 赛后手动触发题目与用户统计同步。
+
 #### GET `/contests/:id/leaderboard` - 比赛排行榜（管理员）
 
 **认证**: 需要 Bearer Token + 管理员权限
@@ -1270,6 +1323,7 @@ type Claims struct {
 | role | VARCHAR(20) | 角色：user/admin |
 | group | VARCHAR(50) | 分组 |
 | solved_count | INTEGER | 解题数 |
+| accepted_count | INTEGER | 通过提交总数 |
 | submit_count | INTEGER | 提交数 |
 | created_at | DATETIME | 创建时间 |
 | updated_at | DATETIME | 更新时间 |
@@ -1282,12 +1336,16 @@ type Claims struct {
 | description | TEXT | 描述（Markdown） |
 | input_format | TEXT | 输入格式 |
 | output_format | TEXT | 输出格式 |
+| hint | TEXT | 提示（可选） |
 | samples | TEXT | 样例（JSON） |
 | time_limit | INTEGER | 时间限制（ms） |
 | memory_limit | INTEGER | 内存限制（MB） |
 | difficulty | VARCHAR(20) | 难度 |
 | tags | TEXT | 标签（JSON） |
 | ai_judge_config | TEXT | AI 判题配置（JSON） |
+| file_io_enabled | BOOLEAN | 是否启用文件 IO |
+| file_input_name | VARCHAR(100) | 输入文件名（如 `data.in`） |
+| file_output_name | VARCHAR(100) | 输出文件名（如 `data.out`） |
 | is_public | BOOLEAN | 是否公开 |
 | created_by | INTEGER | 创建者 ID |
 | submit_count | INTEGER | 提交数 |
@@ -1336,6 +1394,7 @@ type Claims struct {
 | problem_ids | TEXT | 题目 ID 列表（JSON） |
 | allowed_users | TEXT | 允许用户 ID 列表（JSON） |
 | allowed_groups | TEXT | 允许分组列表（JSON） |
+| is_stats_synced | BOOLEAN | 赛后统计是否已同步 |
 | created_by | INTEGER | 创建者 ID |
 | created_at | DATETIME | 创建时间 |
 | updated_at | DATETIME | 更新时间 |
@@ -1630,8 +1689,8 @@ IF AI 判定未通过:
 | `/` | Home | 公开 |
 | `/problems` | ProblemList | 公开 |
 | `/problem/:id` | ProblemDetail | 公开 |
-| `/submissions` | SubmissionList | 公开 |
-| `/submission/:id` | SubmissionDetail | 公开 |
+| `/submissions` | SubmissionList | 需登录 |
+| `/submission/:id` | SubmissionDetail | 需登录 |
 | `/contests` | ContestList | 需登录 |
 | `/contest/:id` | ContestDetail | 需登录 |
 | `/rank` | Rank | 公开 |
@@ -1653,6 +1712,15 @@ IF AI 判定未通过:
 | `TestcaseResults` | `components/submission/TestcaseResults.vue` | 测试点结果展示 |
 | `MarkdownPreview` | `components/common/MarkdownPreview.vue` | Markdown 预览（支持 LaTeX） |
 | `Settings` | `views/admin/Settings.vue` | 系统设置页面 |
+
+### 7.5 当前 UI 设计要点
+
+- 全局采用 Swiss 风格变量体系（`src/styles/global.scss`），统一颜色、字号、边框与容器宽度。
+- 导航栏品牌为 `USTC OJ`，使用轻量半透明吸顶布局。
+- 列表页（题目、提交、比赛、排行榜）统一表格样式与居中布局。
+- 题目详情页采用 splitpanes 分栏：左侧题面，右侧 Monaco 编辑器；支持 `fontSize` 和 `tabSize` 调整。
+- 提交详情与比赛详情使用指标仪表盘风格，突出状态、分数、时间与内存信息。
+- 管理后台 `ProblemEdit` 支持 Markdown 双栏编辑预览、单文件测试点上传与 Zip 覆盖上传。
 
 ---
 
@@ -1818,5 +1886,5 @@ SELECT * FROM submissions WHERE status='Pending';  # 查看待判题
 
 ---
 
-*文档版本: v1.0*
-*更新日期: 2025-01-28*
+*文档版本: v1.1*
+*更新日期: 2026-02-11*
