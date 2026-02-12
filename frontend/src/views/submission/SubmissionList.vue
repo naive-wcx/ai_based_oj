@@ -2,59 +2,76 @@
   <div class="submission-list-wrapper">
     <div class="container">
       <div class="page-header">
-        <h1 class="page-title">提交记录</h1>
-        <div class="filter-group">
-          <el-input
-            v-model="filters.problem_id"
-            placeholder="题目 ID"
-            style="width: 120px"
-            @keyup.enter="handleSearch"
-          >
-             <template #prefix>#</template>
-          </el-input>
-          
-          <el-input
-            v-if="userStore.isAdmin"
-            v-model="filters.username"
-            placeholder="用户名"
-            style="width: 140px"
-            @keyup.enter="handleSearch"
-          />
-          
-          <el-select
-            v-model="filters.language"
-            placeholder="所有语言"
-            clearable
-            style="width: 120px"
-            @change="handleSearch"
-          >
-            <el-option
-              v-for="(label, lang) in languageLabels"
-              :key="lang"
-              :label="label"
-              :value="lang"
-            />
-          </el-select>
-          
-          <el-select
-            v-model="filters.status"
-            placeholder="所有状态"
-            clearable
-            style="width: 140px"
-            @change="handleSearch"
-          >
-            <el-option
-              v-for="(item, status) in statusMap"
-              :key="status"
-              :label="item.label"
-              :value="status"
-            />
-          </el-select>
+        <div>
+          <h1 class="page-title">提交记录</h1>
+          <p class="page-subtitle">支持按题目、用户（管理员）和状态快速筛选。</p>
+        </div>
+        <div class="header-stats">
+          <div class="stat-chip">
+            <span>总提交</span>
+            <strong>{{ pagination.total }}</strong>
+          </div>
+          <div class="stat-chip">
+            <span>本页 AC</span>
+            <strong>{{ pageAcceptedCount }}</strong>
+          </div>
+          <div class="stat-chip">
+            <span>评测中</span>
+            <strong>{{ pageJudgingCount }}</strong>
+          </div>
         </div>
       </div>
 
-      <div class="table-container">
-        <el-table :data="submissions" v-loading="loading" class="swiss-table">
+      <div class="filter-panel">
+        <el-input
+          v-model="filters.problem_id"
+          clearable
+          placeholder="题目 ID"
+          class="id-input"
+          @clear="handleSearch"
+          @keyup.enter="handleSearch"
+        >
+          <template #prefix>#</template>
+        </el-input>
+
+        <el-input
+          v-if="userStore.isAdmin"
+          v-model="filters.user_id"
+          clearable
+          placeholder="用户 ID"
+          class="id-input"
+          @clear="handleSearch"
+          @keyup.enter="handleSearch"
+        />
+
+        <el-select
+          v-model="filters.status"
+          placeholder="所有状态"
+          clearable
+          class="status-select"
+          @change="handleSearch"
+        >
+          <el-option
+            v-for="(item, status) in statusMap"
+            :key="status"
+            :label="item.label"
+            :value="status"
+          />
+        </el-select>
+
+        <div class="filter-actions">
+          <el-button type="primary" @click="handleSearch">查询</el-button>
+          <el-button plain @click="handleReset">重置</el-button>
+        </div>
+      </div>
+
+      <div class="table-container" v-loading="loading">
+        <el-table
+          v-if="submissions.length"
+          :data="submissions"
+          class="swiss-table"
+          @row-click="goSubmissionDetail"
+        >
           <!-- 编号 -->
           <el-table-column prop="id" label="编号" width="100" align="center" header-align="center">
             <template #default="{ row }">
@@ -65,7 +82,7 @@
           <!-- 题目 -->
           <el-table-column label="题目" min-width="200" align="center" header-align="center">
             <template #default="{ row }">
-              <router-link :to="`/problem/${row.problem_id}`" class="problem-link">
+              <router-link :to="`/problem/${row.problem_id}`" class="problem-link" @click.stop>
                 {{ row.problem_id }}. {{ row.problem_title }}
               </router-link>
             </template>
@@ -74,7 +91,7 @@
           <!-- 状态 -->
           <el-table-column label="状态" width="180" align="center" header-align="center">
             <template #default="{ row }">
-              <router-link :to="`/submission/${row.id}`" class="status-link">
+              <router-link :to="`/submission/${row.id}`" class="status-link" @click.stop>
                 <span :class="['status-tag', getStatusClass(row.status)]">
                   {{ statusMap[row.status]?.label || row.status }}
                 </span>
@@ -110,6 +127,8 @@
             </template>
           </el-table-column>
         </el-table>
+
+        <el-empty v-else description="暂无提交记录" />
       </div>
 
       <div class="pagination-wrapper" v-if="pagination.total > 0">
@@ -118,7 +137,7 @@
           v-model:page-size="pagination.size"
           :total="pagination.total"
           :page-sizes="[20, 50, 100]"
-          layout="prev, pager, next"
+          layout="total, sizes, prev, pager, next"
           @size-change="handleSearch"
           @current-change="fetchSubmissions"
         />
@@ -128,7 +147,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { submissionApi } from '@/api/submission'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from '@/utils/message'
@@ -139,27 +158,19 @@ const submissions = ref([])
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
+const defaultPageSize = 50
 
 const filters = reactive({
   problem_id: route.query.problem_id || '',
-  username: route.query.username || '',
-  language: route.query.language || '',
+  user_id: route.query.user_id || '',
   status: route.query.status || '',
 })
 
 const pagination = reactive({
   page: parseInt(route.query.page, 10) || 1,
-  size: parseInt(route.query.size, 10) || 50,
+  size: parseInt(route.query.size, 10) || defaultPageSize,
   total: 0,
 })
-
-const languageLabels = {
-  c: 'C',
-  cpp: 'C++',
-  python: 'Python',
-  java: 'Java',
-  go: 'Go',
-}
 
 const statusMap = {
   'Pending': { label: '等待中', class: 'waiting' },
@@ -173,6 +184,14 @@ const statusMap = {
   'Compile Error': { label: 'Compile Error', class: 'ce' },
   'System Error': { label: 'System Error', class: 'uqe' },
 }
+
+const pageAcceptedCount = computed(
+  () => submissions.value.filter((item) => item.status === 'Accepted').length
+)
+
+const pageJudgingCount = computed(
+  () => submissions.value.filter((item) => item.status === 'Judging' || item.status === 'Pending').length
+)
 
 const getStatusClass = (status) => {
   return statusMap[status]?.class || 'waiting'
@@ -193,17 +212,24 @@ const updateUrl = () => {
   const query = {
     page: pagination.page,
     size: pagination.size,
-    ...Object.fromEntries(
-      Object.entries(filters).filter(([, value]) => value)
-    ),
+    ...(filters.problem_id && { problem_id: filters.problem_id }),
+    ...(userStore.isAdmin && filters.user_id && { user_id: filters.user_id }),
+    ...(filters.status && { status: filters.status }),
   }
-  router.push({ query })
+  router.replace({ query })
 }
 
 async function fetchSubmissions() {
   loading.value = true
   try {
-    const params = { ...filters, ...pagination }
+    const params = {
+      page: pagination.page,
+      size: pagination.size,
+      status: filters.status,
+    }
+    if (filters.problem_id) params.problem_id = parseInt(filters.problem_id, 10) || undefined
+    if (userStore.isAdmin && filters.user_id) params.user_id = parseInt(filters.user_id, 10) || undefined
+
     const res = await submissionApi.getList(params)
     submissions.value = res.data.list || []
     pagination.total = res.data.total
@@ -221,6 +247,19 @@ const handleSearch = () => {
   fetchSubmissions()
 }
 
+const handleReset = () => {
+  filters.problem_id = ''
+  filters.user_id = ''
+  filters.status = ''
+  pagination.page = 1
+  pagination.size = defaultPageSize
+  fetchSubmissions()
+}
+
+function goSubmissionDetail(row) {
+  router.push(`/submission/${row.id}`)
+}
+
 onMounted(() => {
   fetchSubmissions()
 })
@@ -236,7 +275,7 @@ onMounted(() => {
 .page-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-end;
   margin-bottom: 30px;
   padding-bottom: 20px;
   border-bottom: 1px solid var(--swiss-border-light);
@@ -249,9 +288,65 @@ onMounted(() => {
   margin: 0;
 }
 
-.filter-group {
+.page-subtitle {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--swiss-text-secondary);
+}
+
+.header-stats {
   display: flex;
-  gap: 16px;
+  gap: 10px;
+}
+
+.stat-chip {
+  min-width: 90px;
+  border: 1px solid var(--swiss-border-light);
+  background: #fff;
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+
+  span {
+    font-size: 11px;
+    color: var(--swiss-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  strong {
+    font-size: 18px;
+    color: var(--swiss-text-main);
+    line-height: 1;
+  }
+}
+
+.filter-panel {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 14px;
+  border: 1px solid var(--swiss-border-light);
+  border-radius: var(--radius-sm);
+  background: #fff;
+}
+
+.id-input {
+  width: 130px;
+}
+
+.status-select {
+  width: 180px;
+}
+
+.filter-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
 }
 
 .table-container {
@@ -259,6 +354,7 @@ onMounted(() => {
   border: 1px solid var(--swiss-border-light);
   border-radius: var(--radius-sm);
   overflow: hidden;
+  min-height: 220px;
 }
 
 .id-text {
@@ -318,5 +414,21 @@ onMounted(() => {
   margin-top: 30px;
   display: flex;
   justify-content: center;
+}
+
+@media (max-width: 1024px) {
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+  }
+
+  .filter-panel {
+    flex-wrap: wrap;
+  }
+
+  .filter-actions {
+    margin-left: 0;
+  }
 }
 </style>

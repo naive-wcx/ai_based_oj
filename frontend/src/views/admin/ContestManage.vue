@@ -1,14 +1,32 @@
 <template>
   <div class="contest-manage">
     <div class="page-header">
-      <h2>比赛管理</h2>
+      <div>
+        <h2 class="page-title">比赛管理</h2>
+        <p class="page-subtitle">维护比赛时间、赛制和题目编排。</p>
+      </div>
       <el-button type="primary" @click="$router.push('/admin/contest/create')">
         创建比赛
       </el-button>
     </div>
 
-    <div class="card">
-      <el-table :data="contests" v-loading="loading" stripe>
+    <div class="header-stats">
+      <div class="stat-chip">
+        <span>总场次</span>
+        <strong>{{ pagination.total }}</strong>
+      </div>
+      <div class="stat-chip">
+        <span>进行中</span>
+        <strong>{{ pageRunningCount }}</strong>
+      </div>
+      <div class="stat-chip">
+        <span>未开始</span>
+        <strong>{{ pageUpcomingCount }}</strong>
+      </div>
+    </div>
+
+    <div class="card table-card" v-loading="loading">
+      <el-table v-if="contests.length" :data="contests" stripe class="swiss-table">
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="title" label="比赛名称" min-width="240" />
         <el-table-column label="赛制" width="100">
@@ -33,6 +51,13 @@
             {{ row.problem_count || 0 }}
           </template>
         </el-table-column>
+        <el-table-column label="状态" width="110">
+          <template #default="{ row }">
+            <span :class="['status-pill', getStatusClass(row)]">
+              {{ getStatusLabel(row) }}
+            </span>
+          </template>
+        </el-table-column>
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
             <el-button size="small" @click="$router.push(`/admin/contest/${row.id}/edit`)">
@@ -45,7 +70,9 @@
         </el-table-column>
       </el-table>
 
-      <div class="pagination">
+      <el-empty v-else description="暂无比赛数据" />
+
+      <div class="pagination" v-if="pagination.total > 0">
         <el-pagination
           v-model:current-page="pagination.page"
           v-model:page-size="pagination.size"
@@ -61,7 +88,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import { message } from '@/utils/message'
 import { contestApi } from '@/api/contest'
@@ -76,11 +103,46 @@ const pagination = reactive({
   total: 0,
 })
 
+const pageRunningCount = computed(
+  () => contests.value.filter((contest) => getStatus(contest) === 'running').length
+)
+
+const pageUpcomingCount = computed(
+  () => contests.value.filter((contest) => getStatus(contest) === 'upcoming').length
+)
+
 function formatDate(value) {
   if (!value) return '-'
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
-  return date.toLocaleString()
+  return date.toLocaleString('zh-CN', { hour12: false })
+}
+
+function getStatus(contest) {
+  const now = Date.now()
+  const startAt = new Date(contest.start_at).getTime()
+  const endAt = new Date(contest.end_at).getTime()
+  if (now < startAt) return 'upcoming'
+  if (now > endAt) return 'ended'
+  return 'running'
+}
+
+function getStatusLabel(contest) {
+  const statusMap = {
+    upcoming: '未开始',
+    running: '进行中',
+    ended: '已结束',
+  }
+  return statusMap[getStatus(contest)]
+}
+
+function getStatusClass(contest) {
+  const classMap = {
+    upcoming: 'status-upcoming',
+    running: 'status-running',
+    ended: 'status-ended',
+  }
+  return classMap[getStatus(contest)]
 }
 
 async function fetchContests() {
@@ -123,17 +185,97 @@ onMounted(() => {
 .page-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
+  align-items: flex-end;
+  margin-bottom: 14px;
+}
 
-  h2 {
-    margin: 0;
+.page-title {
+  margin: 0;
+}
+
+.page-subtitle {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--swiss-text-secondary);
+}
+
+.header-stats {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.stat-chip {
+  min-width: 92px;
+  border: 1px solid var(--swiss-border-light);
+  background: #fff;
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+
+  span {
+    font-size: 11px;
+    color: var(--swiss-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
   }
+
+  strong {
+    font-size: 18px;
+    line-height: 1;
+    color: var(--swiss-text-main);
+  }
+}
+
+.table-card {
+  border: 1px solid var(--swiss-border-light);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  padding: 12px;
+  min-height: 240px;
+}
+
+.status-pill {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-upcoming {
+  color: #1d4ed8;
+  background: #dbeafe;
+}
+
+.status-running {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.status-ended {
+  color: #6b7280;
+  background: #f3f4f6;
 }
 
 .pagination {
   margin-top: 20px;
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
+}
+
+@media (max-width: 1024px) {
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .header-stats {
+    flex-wrap: wrap;
+  }
 }
 </style>

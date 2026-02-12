@@ -13,17 +13,18 @@ const year = new Date().getFullYear()
 
 <style lang="scss" scoped>
 .footer {
-  background: #303133;
-  color: #909399;
-  padding: 24px 0;
+  background: #fafafa;
+  color: var(--swiss-text-secondary);
+  padding: 20px 0;
   text-align: center;
   margin-top: auto;
+  border-top: 1px solid var(--swiss-border-light);
 }
 
 .footer-content {
   p {
     margin: 4px 0;
-    font-size: 14px;
+    font-size: 13px;
   }
   
   .copyright {

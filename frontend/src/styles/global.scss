@@ -35,6 +35,18 @@
   --container-width: 1400px; /* Increased from 1080px */
   --radius-xs: 2px;
   --radius-sm: 4px;
+
+  /* Compatibility Tokens */
+  --color-bg: var(--swiss-bg-base);
+  --color-surface: #ffffff;
+  --color-border: var(--swiss-border-light);
+  --color-text-primary: var(--swiss-text-main);
+  --color-text-secondary: var(--swiss-text-secondary);
+  --color-primary: var(--swiss-primary);
+  --color-success: var(--swiss-success);
+  --color-warning: var(--swiss-warning);
+  --color-danger: var(--swiss-danger);
+  --font-family-mono: var(--font-mono);
 }
 
 /* Reset */
@@ -44,6 +56,7 @@ body {
   font-family: var(--font-sans);
   color: var(--swiss-text-main);
   background-color: var(--swiss-bg-base);
+  background-image: linear-gradient(180deg, #ffffff 0%, #fbfbfc 100%);
   -webkit-font-smoothing: antialiased;
   line-height: 1.5;
   overflow-y: scroll; /* Prevent layout shift */
@@ -169,6 +182,10 @@ h1, h2, h3, h4, h5, h6 {
 
 .el-table td.el-table__cell {
     border-bottom: 1px solid var(--swiss-border-light);
+}
+
+.swiss-table .el-table__row {
+  transition: background-color 0.2s ease;
 }
 
 /* Inputs */

@@ -1,14 +1,32 @@
 <template>
   <div class="problem-manage">
     <div class="page-header">
-      <h2>题目管理</h2>
+      <div>
+        <h2 class="page-title">题目管理</h2>
+        <p class="page-subtitle">统一管理题目可见性、难度和 AI 判题配置。</p>
+      </div>
       <el-button type="primary" @click="$router.push('/admin/problem/create')">
         <el-icon><Plus /></el-icon> 创建题目
       </el-button>
     </div>
+
+    <div class="header-stats">
+      <div class="stat-chip">
+        <span>总题数</span>
+        <strong>{{ pagination.total }}</strong>
+      </div>
+      <div class="stat-chip">
+        <span>本页 AI</span>
+        <strong>{{ pageAICount }}</strong>
+      </div>
+      <div class="stat-chip">
+        <span>本页隐藏</span>
+        <strong>{{ pageHiddenCount }}</strong>
+      </div>
+    </div>
     
-    <div class="card">
-      <el-table :data="problems" v-loading="loading" stripe>
+    <div class="card table-card" v-loading="loading">
+      <el-table v-if="problems.length" :data="problems" stripe class="swiss-table">
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column label="题目" min-width="220">
           <template #default="{ row }">
@@ -45,8 +63,10 @@
           </template>
         </el-table-column>
       </el-table>
+
+      <el-empty v-else description="暂无题目数据" />
       
-      <div class="pagination">
+      <div class="pagination" v-if="pagination.total > 0">
         <el-pagination
           v-model:current-page="pagination.page"
           v-model:page-size="pagination.size"
@@ -62,7 +82,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import { message } from '@/utils/message'
 import { Plus } from '@element-plus/icons-vue'
@@ -77,6 +97,14 @@ const pagination = reactive({
   size: 20,
   total: 0,
 })
+
+const pageAICount = computed(
+  () => problems.value.filter((problem) => problem.has_ai_judge).length
+)
+
+const pageHiddenCount = computed(
+  () => problems.value.filter((problem) => problem.is_public === false).length
+)
 
 async function fetchProblems() {
   loading.value = true
@@ -119,21 +147,78 @@ onMounted(() => {
 .page-header {
   display: flex;
   justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 14px;
+}
+
+.page-title {
+  margin: 0;
+}
+
+.page-subtitle {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--swiss-text-secondary);
+}
+
+.header-stats {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.stat-chip {
+  min-width: 92px;
+  border: 1px solid var(--swiss-border-light);
+  background: #fff;
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  margin-bottom: 20px;
-  
-  h2 {
-    margin: 0;
+  gap: 2px;
+
+  span {
+    font-size: 11px;
+    color: var(--swiss-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
   }
+
+  strong {
+    font-size: 18px;
+    line-height: 1;
+    color: var(--swiss-text-main);
+  }
+}
+
+.table-card {
+  border: 1px solid var(--swiss-border-light);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  padding: 12px;
+  min-height: 240px;
 }
 
 .pagination {
   margin-top: 20px;
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
 }
 
 .hidden-tag {
   margin-left: 8px;
+}
+
+@media (max-width: 1024px) {
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .header-stats {
+    flex-wrap: wrap;
+  }
 }
 </style>

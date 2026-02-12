@@ -1,15 +1,33 @@
 <template>
   <div class="user-manage">
     <div class="page-header">
-      <h2>用户管理</h2>
+      <div>
+        <h2 class="page-title">用户管理</h2>
+        <p class="page-subtitle">支持账户维护、角色切换与批量导入。</p>
+      </div>
       <div class="page-actions">
         <el-button type="primary" @click="openCreateDialog">创建用户</el-button>
         <el-button @click="openBatchDialog">批量导入</el-button>
       </div>
     </div>
+
+    <div class="header-stats">
+      <div class="stat-chip">
+        <span>总用户</span>
+        <strong>{{ pagination.total }}</strong>
+      </div>
+      <div class="stat-chip">
+        <span>本页管理员</span>
+        <strong>{{ pageAdminCount }}</strong>
+      </div>
+      <div class="stat-chip">
+        <span>本页解题</span>
+        <strong>{{ pageSolvedCount }}</strong>
+      </div>
+    </div>
     
-    <div class="card">
-      <el-table :data="users" v-loading="loading" stripe>
+    <div class="card table-card" v-loading="loading">
+      <el-table v-if="users.length" :data="users" stripe class="swiss-table">
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="username" label="用户名" width="150" />
         <el-table-column prop="email" label="邮箱" min-width="200" />
@@ -49,8 +67,10 @@
           </template>
         </el-table-column>
       </el-table>
+
+      <el-empty v-else description="暂无用户数据" />
       
-      <div class="pagination">
+      <div class="pagination" v-if="pagination.total > 0">
         <el-pagination
           v-model:current-page="pagination.page"
           v-model:page-size="pagination.size"
@@ -161,7 +181,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import { message } from '@/utils/message'
 import { adminApi } from '@/api/admin'
@@ -174,6 +194,14 @@ const pagination = reactive({
   size: 20,
   total: 0,
 })
+
+const pageAdminCount = computed(
+  () => users.value.filter((user) => user.role === 'admin').length
+)
+
+const pageSolvedCount = computed(
+  () => users.value.reduce((sum, user) => sum + (user.solved_count || 0), 0)
+)
 
 const createDialogVisible = ref(false)
 const createFormRef = ref()
@@ -507,19 +535,56 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .page-header {
-  margin-bottom: 20px;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
-  
-  h2 {
-    margin: 0;
-  }
+  margin-bottom: 14px;
+}
+
+.page-title {
+  margin: 0;
+}
+
+.page-subtitle {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--swiss-text-secondary);
 }
 
 .page-actions {
   display: flex;
   gap: 10px;
+}
+
+.header-stats {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.stat-chip {
+  min-width: 100px;
+  border: 1px solid var(--swiss-border-light);
+  background: #fff;
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+
+  span {
+    font-size: 11px;
+    color: var(--swiss-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  strong {
+    font-size: 18px;
+    line-height: 1;
+    color: var(--swiss-text-main);
+  }
 }
 
 .batch-hint {
@@ -528,9 +593,33 @@ onMounted(() => {
   font-size: 13px;
 }
 
+.table-card {
+  border: 1px solid var(--swiss-border-light);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  padding: 12px;
+  min-height: 260px;
+}
+
 .pagination {
   margin-top: 20px;
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
+}
+
+@media (max-width: 1024px) {
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .page-actions {
+    flex-wrap: wrap;
+  }
+
+  .header-stats {
+    flex-wrap: wrap;
+  }
 }
 </style>

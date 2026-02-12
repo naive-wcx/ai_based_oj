@@ -11,14 +11,15 @@
         </el-form-item>
 
         <el-form-item label="比赛描述" prop="description">
-          <div class="md-editor">
+          <div class="md-row">
             <el-input
               v-model="form.description"
               type="textarea"
-              :rows="6"
               placeholder="支持 Markdown (赛制说明、注意事项等)"
+              class="md-input"
+              resize="none"
             />
-            <div class="md-preview" v-if="form.description">
+            <div class="md-preview">
               <MarkdownPreview :content="form.description" />
             </div>
           </div>
@@ -250,15 +251,48 @@ onMounted(() => {
   margin-top: 16px;
 }
 
-.md-editor {
-  .md-preview {
-    margin-top: 12px;
-    padding: 12px;
-    border: 1px solid #e4e7ed;
-    border-radius: 4px;
-    background-color: #fafafa;
-    max-height: 200px;
-    overflow-y: auto;
+.md-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  width: 100%;
+  height: 320px;
+
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+    height: auto;
+
+    .md-preview {
+      height: 260px;
+      margin-top: 12px;
+    }
+
+    .md-input :deep(.el-textarea__inner) {
+      height: 260px;
+    }
   }
+}
+
+.md-input {
+  height: 100%;
+
+  :deep(.el-textarea) {
+    height: 100%;
+  }
+
+  :deep(.el-textarea__inner) {
+    height: 100%;
+    font-family: var(--font-mono);
+    line-height: 1.6;
+  }
+}
+
+.md-preview {
+  padding: 12px;
+  border: 1px solid #e4e7ed;
+  border-radius: 4px;
+  background-color: #fafafa;
+  overflow-y: auto;
+  height: 100%;
 }
 </style>

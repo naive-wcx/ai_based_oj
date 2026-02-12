@@ -2,13 +2,30 @@
   <div class="rank-list-wrapper">
     <div class="container">
       <div class="page-header">
-        <h1 class="page-title">排行榜</h1>
+        <div>
+          <h1 class="page-title">排行榜</h1>
+          <p class="page-subtitle">按解题数排序，展示用户通过效率与活跃度。</p>
+        </div>
+        <div class="header-stats">
+          <div class="stat-chip">
+            <span>总用户</span>
+            <strong>{{ pagination.total }}</strong>
+          </div>
+          <div class="stat-chip">
+            <span>榜首解题</span>
+            <strong>{{ topSolvedCount }}</strong>
+          </div>
+          <div class="stat-chip">
+            <span>本页均通过率</span>
+            <strong>{{ pageAvgAcceptRate }}</strong>
+          </div>
+        </div>
       </div>
       
-      <div class="table-container">
+      <div class="table-container" v-loading="loading">
         <el-table 
+          v-if="users.length"
           :data="users" 
-          v-loading="loading" 
           class="swiss-table"
         >
           <el-table-column label="排名" width="100" align="center" header-align="center">
@@ -42,12 +59,20 @@
             </template>
           </el-table-column>
 
+          <el-table-column prop="accepted_count" label="通过提交" width="150" align="center" header-align="center">
+            <template #default="{ row }">
+              <span class="stat-value secondary">{{ row.accepted_count ?? '-' }}</span>
+            </template>
+          </el-table-column>
+
           <el-table-column label="通过率" width="150" align="center" header-align="center">
             <template #default="{ row }">
               <span class="stat-value">{{ getAcceptRate(row) }}</span>
             </template>
           </el-table-column>
         </el-table>
+
+        <el-empty v-else description="暂无排行数据" />
       </div>
       
       <div class="pagination-wrapper" v-if="pagination.total > 0">
@@ -56,7 +81,7 @@
           v-model:page-size="pagination.size"
           :total="pagination.total"
           :page-sizes="[50, 100, 200]"
-          layout="prev, pager, next"
+          layout="total, sizes, prev, pager, next"
           @size-change="fetchRank"
           @current-change="fetchRank"
         />
@@ -66,7 +91,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { rankApi } from '@/api/rank'
 
 const loading = ref(true)
@@ -76,6 +101,18 @@ const pagination = reactive({
   page: 1,
   size: 50,
   total: 0,
+})
+
+const topSolvedCount = computed(() => users.value[0]?.solved_count ?? 0)
+
+const pageAvgAcceptRate = computed(() => {
+  if (!users.value.length) return '-'
+  const avg = users.value.reduce((sum, user) => {
+    const accepted = user.accepted_count !== undefined ? user.accepted_count : user.solved_count
+    const rate = user.submit_count ? accepted / user.submit_count : 0
+    return sum + rate
+  }, 0) / users.value.length
+  return `${(avg * 100).toFixed(1)}%`
 })
 
 function getRankClass(rank) {
@@ -123,7 +160,7 @@ onMounted(() => {
 .page-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-end;
   margin-bottom: 30px;
   padding-bottom: 20px;
   border-bottom: 1px solid var(--swiss-border-light);
@@ -136,11 +173,48 @@ onMounted(() => {
   margin: 0;
 }
 
+.page-subtitle {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--swiss-text-secondary);
+}
+
+.header-stats {
+  display: flex;
+  gap: 10px;
+}
+
+.stat-chip {
+  min-width: 110px;
+  border: 1px solid var(--swiss-border-light);
+  background: #fff;
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+
+  span {
+    font-size: 11px;
+    color: var(--swiss-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  strong {
+    font-size: 18px;
+    color: var(--swiss-text-main);
+    line-height: 1;
+  }
+}
+
 .table-container {
   background: #fff;
   border: 1px solid var(--swiss-border-light);
   border-radius: var(--radius-sm);
   overflow: hidden;
+  min-height: 220px;
 }
 
 .rank-number {
@@ -205,5 +279,13 @@ onMounted(() => {
   margin-top: 30px;
   display: flex;
   justify-content: center;
+}
+
+@media (max-width: 1024px) {
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+  }
 }
 </style>

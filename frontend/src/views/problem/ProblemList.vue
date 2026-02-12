@@ -2,62 +2,93 @@
   <div class="problem-list-wrapper">
     <div class="container">
       <div class="page-header">
-        <h1 class="page-title">题目列表</h1>
-        <div class="filter-group">
-          <el-input
-            v-model="filters.keyword"
-            placeholder="搜索题目..."
-            class="search-input"
-            @keyup.enter="handleSearch"
-          >
-            <template #prefix>
-              <el-icon><Search /></el-icon>
-            </template>
-          </el-input>
-
-          <el-select
-            v-model="filters.difficulty"
-            placeholder="所有难度"
-            clearable
-            class="filter-select"
-            @change="handleSearch"
-          >
-            <el-option label="简单" value="easy" />
-            <el-option label="中等" value="medium" />
-            <el-option label="困难" value="hard" />
-          </el-select>
+        <div>
+          <h1 class="page-title">题目列表</h1>
+          <p class="page-subtitle">支持关键词、难度与标签筛选，点击行可快速进入题目详情。</p>
+        </div>
+        <div class="header-stats">
+          <div class="stat-chip">
+            <span>总题数</span>
+            <strong>{{ pagination.total }}</strong>
+          </div>
+          <div class="stat-chip">
+            <span>本页 AC</span>
+            <strong>{{ pageAcceptedCount }}</strong>
+          </div>
+          <div class="stat-chip">
+            <span>AI 题</span>
+            <strong>{{ pageAICount }}</strong>
+          </div>
         </div>
       </div>
 
-      <div class="table-container">
-        <el-table 
-          :data="problems" 
-          v-loading="loading" 
-          class="swiss-table"
+      <div class="filter-panel">
+        <el-input
+          v-model="filters.keyword"
+          clearable
+          placeholder="搜索题目标题或描述"
+          class="search-input"
+          @clear="handleSearch"
+          @keyup.enter="handleSearch"
         >
-          <!-- 编号 -->
+          <template #prefix>
+            <el-icon><Search /></el-icon>
+          </template>
+        </el-input>
+
+        <el-select
+          v-model="filters.difficulty"
+          placeholder="所有难度"
+          clearable
+          class="filter-select"
+          @change="handleSearch"
+        >
+          <el-option label="简单" value="easy" />
+          <el-option label="中等" value="medium" />
+          <el-option label="困难" value="hard" />
+        </el-select>
+
+        <el-input
+          v-model="filters.tag"
+          clearable
+          placeholder="标签（如 dp）"
+          class="tag-input"
+          @clear="handleSearch"
+          @keyup.enter="handleSearch"
+        />
+
+        <div class="filter-actions">
+          <el-button type="primary" @click="handleSearch">查询</el-button>
+          <el-button plain @click="handleReset">重置</el-button>
+        </div>
+      </div>
+
+      <div class="table-container" v-loading="loading">
+        <el-table
+          v-if="problems.length"
+          :data="problems"
+          class="swiss-table"
+          @row-click="goProblemDetail"
+        >
           <el-table-column prop="id" label="编号" width="80" align="center" header-align="center">
             <template #default="{ row }">
               <span class="id-text">{{ row.id }}</span>
             </template>
           </el-table-column>
-          
-          <!-- 状态 -->
+
           <el-table-column label="状态" width="80" align="center" header-align="center">
             <template #default="{ row }">
-               <span v-if="row.has_accepted" class="status-text success">AC</span>
+              <span v-if="row.has_accepted" class="status-text success">AC</span>
             </template>
           </el-table-column>
 
-          <!-- 标题：强制内容居中 -->
-          <el-table-column label="标题" min-width="400" align="center" header-align="center">
+          <el-table-column label="标题" min-width="420" align="center" header-align="center">
             <template #default="{ row }">
               <div class="title-cell">
-                <router-link :to="`/problem/${row.id}`" class="problem-link">
+                <router-link :to="`/problem/${row.id}`" class="problem-link" @click.stop>
                   {{ row.title }}
                 </router-link>
                 <div class="badges">
-                  <!-- 新增：隐藏标识 -->
                   <span v-if="row.is_public === false" class="badge hidden" title="仅管理员或比赛可见">隐藏</span>
                   <span v-if="row.has_ai_judge" class="badge ai">AI</span>
                   <span v-if="row.has_file_io" class="badge file">FILE</span>
@@ -66,8 +97,7 @@
             </template>
           </el-table-column>
 
-          <!-- 标签：强制内容居中 -->
-          <el-table-column label="标签" min-width="120" align="center" header-align="center">
+          <el-table-column label="标签" min-width="140" align="center" header-align="center">
             <template #default="{ row }">
               <div class="tags-wrapper">
                 <span v-for="tag in (row.tags || []).slice(0, 3)" :key="tag" class="text-tag">
@@ -77,15 +107,13 @@
             </template>
           </el-table-column>
 
-          <!-- 通过率 -->
-          <el-table-column label="通过率" width="100" align="center" header-align="center">
+          <el-table-column label="通过率" width="110" align="center" header-align="center">
             <template #default="{ row }">
               <span class="rate-text">{{ getAcceptRate(row) }}</span>
             </template>
           </el-table-column>
 
-          <!-- 难度：强制内容居中 -->
-          <el-table-column label="难度" width="100" align="center" header-align="center">
+          <el-table-column label="难度" width="110" align="center" header-align="center">
             <template #default="{ row }">
               <div class="difficulty-wrapper">
                 <span :class="['difficulty-dot', row.difficulty]"></span>
@@ -94,6 +122,8 @@
             </template>
           </el-table-column>
         </el-table>
+
+        <el-empty v-else description="暂无匹配题目，请调整筛选条件" />
       </div>
 
       <div class="pagination-wrapper" v-if="pagination.total > 0">
@@ -102,8 +132,8 @@
           v-model:page-size="pagination.size"
           :total="pagination.total"
           :page-sizes="[20, 50, 100]"
-          layout="prev, pager, next"
-          @size-change="fetchProblems"
+          layout="total, sizes, prev, pager, next"
+          @size-change="handleSearch"
           @current-change="fetchProblems"
         />
       </div>
@@ -112,7 +142,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { Search } from '@element-plus/icons-vue'
 import { problemApi } from '@/api/problem'
 import { message } from '@/utils/message'
@@ -122,6 +152,7 @@ const loading = ref(true)
 const problems = ref([])
 const router = useRouter()
 const route = useRoute()
+const defaultPageSize = 50
 
 const filters = reactive({
   keyword: route.query.keyword || '',
@@ -131,9 +162,17 @@ const filters = reactive({
 
 const pagination = reactive({
   page: parseInt(route.query.page, 10) || 1,
-  size: parseInt(route.query.size, 10) || 50,
+  size: parseInt(route.query.size, 10) || defaultPageSize,
   total: 0,
 })
+
+const pageAcceptedCount = computed(
+  () => problems.value.filter((problem) => problem.has_accepted).length
+)
+
+const pageAICount = computed(
+  () => problems.value.filter((problem) => problem.has_ai_judge).length
+)
 
 const formatDifficulty = (val) => {
   const map = { easy: '简单', medium: '中等', hard: '困难' }
@@ -141,7 +180,7 @@ const formatDifficulty = (val) => {
 }
 
 const updateUrl = () => {
-  router.push({
+  router.replace({
     query: {
       page: pagination.page,
       size: pagination.size,
@@ -179,10 +218,23 @@ const handleSearch = () => {
   fetchProblems()
 }
 
+const handleReset = () => {
+  filters.keyword = ''
+  filters.difficulty = ''
+  filters.tag = ''
+  pagination.page = 1
+  pagination.size = defaultPageSize
+  fetchProblems()
+}
+
 function getAcceptRate(row) {
   if (!row.submit_count) return '-'
   const rate = ((row.accepted_count / row.submit_count) * 100).toFixed(1)
   return `${rate}%`
+}
+
+function goProblemDetail(row) {
+  router.push(`/problem/${row.id}`)
 }
 
 onMounted(() => {
@@ -200,7 +252,7 @@ onMounted(() => {
 .page-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-end;
   margin-bottom: 30px;
   padding-bottom: 20px;
   border-bottom: 1px solid var(--swiss-border-light);
@@ -214,17 +266,69 @@ onMounted(() => {
   line-height: 1.2;
 }
 
-.filter-group {
+.page-subtitle {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--swiss-text-secondary);
+}
+
+.header-stats {
   display: flex;
-  gap: 16px;
+  gap: 10px;
+}
+
+.stat-chip {
+  min-width: 90px;
+  border: 1px solid var(--swiss-border-light);
+  background: #fff;
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+
+  span {
+    font-size: 11px;
+    color: var(--swiss-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  strong {
+    font-size: 18px;
+    color: var(--swiss-text-main);
+    line-height: 1;
+  }
+}
+
+.filter-panel {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 14px;
+  border: 1px solid var(--swiss-border-light);
+  border-radius: var(--radius-sm);
+  background: #fff;
 }
 
 .search-input {
-  width: 240px;
+  width: 280px;
 }
 
 .filter-select {
-  width: 120px;
+  width: 140px;
+}
+
+.tag-input {
+  width: 160px;
+}
+
+.filter-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
 }
 
 .table-container {
@@ -232,6 +336,7 @@ onMounted(() => {
   border: 1px solid var(--swiss-border-light);
   border-radius: var(--radius-sm);
   overflow: hidden;
+  min-height: 220px;
 }
 
 .id-text {
@@ -344,5 +449,26 @@ onMounted(() => {
   margin-top: 30px;
   display: flex;
   justify-content: center;
+}
+
+@media (max-width: 1024px) {
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+  }
+
+  .filter-panel {
+    flex-wrap: wrap;
+  }
+
+  .search-input {
+    width: 100%;
+    min-width: 220px;
+  }
+
+  .filter-actions {
+    margin-left: 0;
+  }
 }
 </style>
