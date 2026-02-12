@@ -2,21 +2,29 @@
   <div class="contest-detail-wrapper" v-loading="loading">
     <div class="container" v-if="contest">
       <!-- 1. 页头：标题与状态 -->
-      <div class="detail-header">
-        <div class="header-left">
-          <router-link to="/contests" class="back-link">
-            ← 返回比赛列表
-          </router-link>
+	      <div class="detail-header">
+	        <div class="header-left">
+	          <router-link to="/contests" class="back-link">
+	            ← 返回比赛列表
+	          </router-link>
           <h1 class="page-title">
             {{ contest.title }}
           </h1>
-        </div>
-        <div class="header-right">
-           <div class="status-badge" :class="getContestStatusClass(contest)">
-             {{ getContestStatusLabel(contest) }}
-           </div>
-        </div>
-      </div>
+	        </div>
+	        <div class="header-right">
+	          <el-button
+	            v-if="canStartWindowContest"
+	            type="primary"
+	            :loading="startingContest"
+	            @click="handleStartContest"
+	          >
+	            开始比赛（{{ contest.duration_minutes }} 分钟）
+	          </el-button>
+	           <div class="status-badge" :class="getContestStatusClass(contest)">
+	             {{ getContestStatusLabel(contest) }}
+	           </div>
+	        </div>
+	      </div>
 
       <!-- 2. 核心指标仪表盘 -->
       <div class="stats-dashboard">
@@ -30,18 +38,53 @@
           <div class="stat-value time-value">{{ formatDate(contest.start_at) }}</div>
         </div>
         <div class="stat-divider"></div>
-        <div class="stat-card">
-          <div class="stat-label">结束时间</div>
-          <div class="stat-value time-value">{{ formatDate(contest.end_at) }}</div>
-        </div>
-        <div class="stat-divider"></div>
-        <div class="stat-card">
-          <div class="stat-label">我的总分</div>
-          <div class="stat-value score-value" :class="myTotal != null ? 'highlight' : ''">
-            {{ myTotal != null ? myTotal : '-' }}
-          </div>
-        </div>
-      </div>
+	        <div class="stat-card">
+	          <div class="stat-label">结束时间</div>
+	          <div class="stat-value time-value">{{ formatDate(contest.end_at) }}</div>
+	        </div>
+	        <div class="stat-divider"></div>
+	        <div class="stat-card">
+	          <div class="stat-label">计时模式</div>
+	          <div class="stat-value">
+	            {{ contest.timing_mode === 'window' ? `窗口期 + ${contest.duration_minutes || 0} 分钟` : '固定起止' }}
+	          </div>
+	        </div>
+	        <div class="stat-divider"></div>
+	        <div class="stat-card">
+	          <div class="stat-label">我的总分</div>
+	          <div class="stat-value score-value" :class="myTotal != null ? 'highlight' : ''">
+	            {{ myTotal != null ? myTotal : '-' }}
+	          </div>
+	        </div>
+	        <div class="stat-divider"></div>
+	        <div class="stat-card">
+	          <div class="stat-label">我的赛时|赛后</div>
+	          <div class="stat-value time-value">
+	            {{ myLiveTotal != null || myPostTotal != null ? `${myLiveTotal ?? 0} | ${myPostTotal ?? 0}` : '-' }}
+	          </div>
+	        </div>
+	      </div>
+
+	      <div class="session-box" v-if="contest.timing_mode === 'window' && !userStore.isAdmin">
+	        <div class="session-item">
+	          <span class="session-label">个人状态</span>
+	          <span class="session-value">
+	            {{ sessionState?.started ? (sessionState?.in_live ? '进行中' : '已结束') : (canStartWindowContest ? '可开始' : '未开始') }}
+	          </span>
+	        </div>
+	        <div class="session-item">
+	          <span class="session-label">个人开始</span>
+	          <span class="session-value">{{ formatDate(sessionState?.start_at) }}</span>
+	        </div>
+	        <div class="session-item">
+	          <span class="session-label">个人结束</span>
+	          <span class="session-value">{{ formatDate(sessionState?.end_at) }}</span>
+	        </div>
+	        <div class="session-item">
+	          <span class="session-label">剩余时间</span>
+	          <span class="session-value">{{ formatRemaining(sessionState?.remaining_seconds || 0) }}</span>
+	        </div>
+	      </div>
 
       <!-- 3. 比赛描述 -->
       <div class="section-block" v-if="contest.description">
@@ -59,8 +102,7 @@
             <!-- 编号：居中 -->
             <el-table-column prop="id" label="编号" width="80" align="center" header-align="center" />
             
-            <!-- 题目：内容左对齐（符合用户之前对长文本的要求），表头居中 -->
-            <!-- Wait, user said "所有页面的表格内容都要居中". I will center it. -->
+            <!-- 题目 -->
             <el-table-column label="题目" min-width="300" align="center" header-align="center">
               <template #default="{ row }">
                 <router-link :to="`/problem/${row.id}`" class="table-link">
@@ -89,21 +131,31 @@
       </div>
 
       <!-- 5. 管理员排行榜 (仅管理员可见) -->
-      <div class="section-block" v-if="userStore.isAdmin">
-        <div class="section-header">
-          <h3 class="section-title">实时排行榜 (管理员)</h3>
-          <el-button size="small" :loading="exporting" @click="handleExport">导出成绩 CSV</el-button>
-        </div>
-        <div class="table-wrapper">
-          <el-table :data="leaderboardEntries" v-loading="leaderboardLoading" class="swiss-table">
+	      <div class="section-block" v-if="userStore.isAdmin">
+	        <div class="section-header">
+	          <h3 class="section-title">排行榜 (管理员)</h3>
+	          <div class="leaderboard-actions">
+	            <el-radio-group v-model="leaderboardMode" size="small" @change="fetchLeaderboard">
+	              <el-radio-button label="combined">赛时|赛后</el-radio-button>
+	              <el-radio-button label="live">赛时</el-radio-button>
+	              <el-radio-button label="post">赛后</el-radio-button>
+	            </el-radio-group>
+	            <el-button size="small" :loading="exporting" @click="handleExport">导出成绩 CSV</el-button>
+	          </div>
+	        </div>
+	        <div class="table-wrapper">
+	          <el-table :data="leaderboardEntries" v-loading="leaderboardLoading" class="swiss-table">
             <el-table-column prop="user_id" label="ID" width="80" align="center" header-align="center" />
             <el-table-column prop="username" label="用户" width="160" align="center" header-align="center" />
             <el-table-column prop="group" label="分组" width="120" align="center" header-align="center" />
-            <el-table-column prop="total" label="总分" width="100" align="center" header-align="center">
-              <template #default="{ row }">
-                <span class="score-cell">{{ row.total }}</span>
-              </template>
-            </el-table-column>
+	            <el-table-column prop="total" :label="leaderboardMode === 'combined' ? '赛时|赛后' : '总分'" width="130" align="center" header-align="center">
+	              <template #default="{ row }">
+	                <span class="score-cell" v-if="leaderboardMode === 'combined'">
+	                  {{ row.live_total }} | {{ row.post_total }}
+	                </span>
+	                <span class="score-cell" v-else>{{ row.total }}</span>
+	              </template>
+	            </el-table-column>
             <el-table-column
               v-for="(pid, index) in leaderboardProblemIds"
               :key="pid"
@@ -111,12 +163,17 @@
               :min-width="80"
               align="center"
               header-align="center"
-            >
-              <template #default="{ row }">
-                <span :class="getScoreClass(row.scores?.[index])">{{ row.scores?.[index] ?? '-' }}</span>
-              </template>
-            </el-table-column>
-          </el-table>
+	            >
+	              <template #default="{ row }">
+	                <span v-if="leaderboardMode === 'combined'">
+	                  <span :class="getScoreClass(row.live_scores?.[index])">{{ row.live_scores?.[index] ?? 0 }}</span>
+	                  |
+	                  <span :class="getScoreClass(row.post_scores?.[index])">{{ row.post_scores?.[index] ?? 0 }}</span>
+	                </span>
+	                <span v-else :class="getScoreClass(row.scores?.[index])">{{ row.scores?.[index] ?? '-' }}</span>
+	              </template>
+	            </el-table-column>
+	          </el-table>
         </div>
       </div>
 
@@ -125,7 +182,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { message } from '@/utils/message'
 import { contestApi } from '@/api/contest'
@@ -139,11 +196,22 @@ const loading = ref(false)
 const contest = ref(null)
 const problems = ref([])
 const myTotal = ref(null)
+const myLiveTotal = ref(null)
+const myPostTotal = ref(null)
+const sessionState = ref(null)
 const userStore = useUserStore()
 const leaderboardLoading = ref(false)
 const exporting = ref(false)
+const startingContest = ref(false)
 const leaderboardProblemIds = ref([])
 const leaderboardEntries = ref([])
+const leaderboardMode = ref('combined')
+
+const canStartWindowContest = computed(() =>
+  !userStore.isAdmin &&
+  contest.value?.timing_mode === 'window' &&
+  !!sessionState.value?.can_start
+)
 
 function formatDate(value) {
   if (!value) return '-'
@@ -155,6 +223,15 @@ function formatDate(value) {
     hour: '2-digit',
     minute: '2-digit'
   })
+}
+
+function formatRemaining(seconds) {
+  const s = Number(seconds || 0)
+  if (s <= 0) return '-'
+  const hours = Math.floor(s / 3600)
+  const minutes = Math.floor((s % 3600) / 60)
+  const remainSeconds = s % 60
+  return `${hours}h ${minutes}m ${remainSeconds}s`
 }
 
 function getContestStatusClass(contest) {
@@ -189,6 +266,9 @@ async function fetchContest() {
     const res = await contestApi.getById(route.params.id)
     contest.value = res.data.contest
     problems.value = res.data.problems || []
+    sessionState.value = res.data.session || null
+    myLiveTotal.value = res.data.my_live_total ?? null
+    myPostTotal.value = res.data.my_post_total ?? null
     myTotal.value = res.data.my_total ?? null
     if (userStore.isAdmin) {
       fetchLeaderboard()
@@ -203,9 +283,12 @@ async function fetchContest() {
 async function fetchLeaderboard() {
   leaderboardLoading.value = true
   try {
-    const res = await adminApi.getContestLeaderboard(route.params.id)
+    const res = await adminApi.getContestLeaderboard(route.params.id, {
+      board_mode: leaderboardMode.value,
+    })
     leaderboardProblemIds.value = res.data.problem_ids || []
     leaderboardEntries.value = res.data.entries || []
+    leaderboardMode.value = res.data.board_mode || leaderboardMode.value
   } catch (e) {
     console.error(e)
   } finally {
@@ -213,15 +296,31 @@ async function fetchLeaderboard() {
   }
 }
 
+async function handleStartContest() {
+  if (!canStartWindowContest.value) return
+  startingContest.value = true
+  try {
+    await contestApi.start(route.params.id)
+    message.success({ message: '比赛已开始，祝你好运！', duration: 1000 })
+    await fetchContest()
+  } catch (e) {
+    console.error(e)
+  } finally {
+    startingContest.value = false
+  }
+}
+
 async function handleExport() {
   exporting.value = true
   try {
-    const res = await adminApi.exportContestLeaderboard(route.params.id)
+    const res = await adminApi.exportContestLeaderboard(route.params.id, {
+      board_mode: leaderboardMode.value,
+    })
     const blob = new Blob([res.data], { type: 'text/csv;charset=utf-8' })
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `contest_${route.params.id}_leaderboard.csv`
+    link.download = `contest_${route.params.id}_leaderboard_${leaderboardMode.value}.csv`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -254,6 +353,12 @@ onMounted(() => {
   margin-bottom: 30px;
   padding-bottom: 20px;
   border-bottom: 1px solid var(--swiss-border-light);
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .back-link {
@@ -295,6 +400,34 @@ onMounted(() => {
   margin-bottom: 30px;
   flex-wrap: wrap;
   gap: 20px;
+}
+
+.session-box {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 30px;
+}
+
+.session-item {
+  background: #fff;
+  border: 1px solid var(--swiss-border-light);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.session-label {
+  font-size: 12px;
+  color: var(--swiss-text-secondary);
+}
+
+.session-value {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--swiss-text-main);
 }
 
 .stat-card {
@@ -344,6 +477,12 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
+}
+
+.leaderboard-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .section-title {

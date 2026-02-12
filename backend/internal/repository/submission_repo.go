@@ -108,6 +108,36 @@ func (r *SubmissionRepository) List(page, size int, problemID, userID uint, stat
 	return items, total, nil
 }
 
+func (r *SubmissionRepository) ListRejudgeCandidatesByProblem(problemID uint) ([]model.Submission, error) {
+	var submissions []model.Submission
+	err := r.db.Where("problem_id = ?", problemID).
+		Where("status NOT IN ?", []string{model.StatusPending, model.StatusJudging}).
+		Order("id ASC").
+		Find(&submissions).Error
+	if err != nil {
+		return nil, err
+	}
+	return submissions, nil
+}
+
+func (r *SubmissionRepository) ResetForRejudge(ids []uint) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	return r.db.Model(&model.Submission{}).
+		Where("id IN ?", ids).
+		Updates(map[string]interface{}{
+			"status":           model.StatusPending,
+			"time_used":        0,
+			"memory_used":      0,
+			"score":            0,
+			"testcase_results": model.TestcaseResultList{},
+			"ai_judge_result":  nil,
+			"compile_error":    "",
+			"final_message":    "",
+		}).Error
+}
+
 // GetPendingSubmissions 获取待判题的提交
 func (r *SubmissionRepository) GetPendingSubmissions(limit int) ([]model.Submission, error) {
 	var submissions []model.Submission
@@ -168,6 +198,28 @@ func (r *SubmissionRepository) ListForContest(problemIDs []uint, startAt, endAt 
 		Order("submissions.created_at ASC, submissions.id ASC").
 		Scan(&submissions).Error
 
+	if err != nil {
+		return nil, err
+	}
+
+	return submissions, nil
+}
+
+// ListForContestSince 获取比赛起始时间后的相关提交
+func (r *SubmissionRepository) ListForContestSince(problemIDs []uint, startAt time.Time) ([]model.ContestSubmission, error) {
+	if len(problemIDs) == 0 {
+		return []model.ContestSubmission{}, nil
+	}
+	startAt = startAt.In(time.Local)
+
+	var submissions []model.ContestSubmission
+	err := r.db.Table("submissions").
+		Select("submissions.user_id, submissions.problem_id, submissions.score, submissions.created_at, users.username, users.`group` as user_group").
+		Joins("LEFT JOIN users ON submissions.user_id = users.id").
+		Where("submissions.problem_id IN ?", problemIDs).
+		Where("submissions.created_at >= ?", startAt).
+		Order("submissions.created_at ASC, submissions.id ASC").
+		Scan(&submissions).Error
 	if err != nil {
 		return nil, err
 	}

@@ -29,13 +29,19 @@
       <el-table v-if="contests.length" :data="contests" stripe class="swiss-table">
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="title" label="比赛名称" min-width="240" />
-        <el-table-column label="赛制" width="100">
-          <template #default="{ row }">
-            <el-tag size="small" :type="row.type === 'oi' ? 'warning' : 'success'">
-              {{ row.type?.toUpperCase() }}
-            </el-tag>
-          </template>
-        </el-table-column>
+	        <el-table-column label="赛制" width="100">
+	          <template #default="{ row }">
+	            <el-tag size="small" :type="row.type === 'oi' ? 'warning' : 'success'">
+	              {{ row.type?.toUpperCase() }}
+	            </el-tag>
+	          </template>
+	        </el-table-column>
+	        <el-table-column label="计时" width="170">
+	          <template #default="{ row }">
+	            <span v-if="row.timing_mode === 'window'">窗口期 + {{ row.duration_minutes || 0 }} 分钟</span>
+	            <span v-else>固定起止</span>
+	          </template>
+	        </el-table-column>
         <el-table-column label="开始时间" width="180">
           <template #default="{ row }">
             {{ formatDate(row.start_at) }}

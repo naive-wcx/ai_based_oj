@@ -41,7 +41,8 @@ func (h *SubmissionHandler) Submit(c *gin.Context) {
 		if err := judge.SubmitToQueue(submission); err != nil {
 			// 记录错误但不影响响应
 			submission.Status = model.StatusSystemError
-			submission.FinalMessage = "提交到判题队列失败"
+			submission.FinalMessage = "提交到判题队列失败: " + err.Error()
+			_ = h.service.UpdateResult(submission)
 		}
 	}()
 

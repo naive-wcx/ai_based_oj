@@ -27,17 +27,24 @@ export const problemApi = {
   },
 
   // 上传测试用例（管理员）
-  uploadTestcase(id, formData) {
+  uploadTestcase(id, formData, config = {}) {
     return request.post(`/problem/${id}/testcase`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      ...config,
     })
   },
 
   // 批量上传测试用例（Zip）
-  uploadTestcaseZip(id, formData) {
+  uploadTestcaseZip(id, formData, config = {}) {
     return request.post(`/problem/${id}/testcase/zip`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      ...config,
     })
+  },
+
+  // 整题重测（管理员）
+  rejudge(id) {
+    return request.post(`/problem/${id}/rejudge`)
   },
 
   // 获取测试用例列表（管理员）

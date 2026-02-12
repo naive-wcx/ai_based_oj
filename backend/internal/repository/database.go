@@ -43,6 +43,7 @@ func autoMigrate() error {
 	return DB.AutoMigrate(
 		&model.User{},
 		&model.Contest{},
+		&model.ContestParticipation{},
 		&model.Problem{},
 		&model.Testcase{},
 		&model.Submission{},

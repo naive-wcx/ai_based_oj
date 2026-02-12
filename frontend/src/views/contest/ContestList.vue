@@ -34,7 +34,7 @@
               <span class="id-text">{{ row.id }}</span>
             </template>
           </el-table-column>
-          
+
           <el-table-column label="比赛名称" min-width="260" align="center" header-align="center">
             <template #default="{ row }">
               <router-link :to="`/contest/${row.id}`" class="contest-title" @click.stop>
@@ -42,14 +42,22 @@
               </router-link>
             </template>
           </el-table-column>
-          
-          <el-table-column label="赛制" width="100" align="center" header-align="center">
-            <template #default="{ row }">
-              <span class="rule-type">{{ row.type?.toUpperCase() }}</span>
-            </template>
-          </el-table-column>
-          
-          <el-table-column label="开始时间" width="180" align="center" header-align="center">
+
+	          <el-table-column label="赛制" width="100" align="center" header-align="center">
+	            <template #default="{ row }">
+	              <span class="rule-type">{{ row.type?.toUpperCase() }}</span>
+	            </template>
+	          </el-table-column>
+	          
+	          <el-table-column label="计时" width="180" align="center" header-align="center">
+	            <template #default="{ row }">
+	              <span class="time-mode-text">
+	                {{ row.timing_mode === 'window' ? `窗口期 + ${row.duration_minutes || 0} 分钟` : '固定起止' }}
+	              </span>
+	            </template>
+	          </el-table-column>
+	          
+	          <el-table-column label="开始时间" width="180" align="center" header-align="center">
             <template #default="{ row }">
               <span class="time-text">{{ formatDate(row.start_at) }}</span>
             </template>
@@ -269,6 +277,11 @@ onMounted(() => {
   background: rgba(0,0,0,0.04);
   padding: 2px 6px;
   border-radius: 4px;
+}
+
+.time-mode-text {
+  font-size: 12px;
+  color: var(--swiss-text-secondary);
 }
 
 .time-text {

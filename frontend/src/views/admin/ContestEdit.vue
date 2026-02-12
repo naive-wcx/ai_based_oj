@@ -25,20 +25,34 @@
           </div>
         </el-form-item>
 
-        <div class="form-row">
-          <el-form-item label="赛制" prop="type" class="form-item">
-            <el-select v-model="form.type" placeholder="请选择赛制">
-              <el-option label="OI" value="oi" />
-              <el-option label="IOI" value="ioi" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="开始时间" prop="start_at" class="form-item">
-            <el-date-picker v-model="form.start_at" type="datetime" placeholder="开始时间" />
-          </el-form-item>
-          <el-form-item label="结束时间" prop="end_at" class="form-item">
-            <el-date-picker v-model="form.end_at" type="datetime" placeholder="结束时间" />
-          </el-form-item>
-        </div>
+	        <div class="form-row">
+	          <el-form-item label="赛制" prop="type" class="form-item">
+	            <el-select v-model="form.type" placeholder="请选择赛制">
+	              <el-option label="OI" value="oi" />
+	              <el-option label="IOI" value="ioi" />
+	            </el-select>
+	          </el-form-item>
+	          <el-form-item label="计时模式" prop="timing_mode" class="form-item">
+	            <el-select v-model="form.timing_mode" placeholder="请选择计时模式">
+	              <el-option label="固定起止时间（传统）" value="fixed" />
+	              <el-option label="窗口期 + 个人固定时长（USACO 风格）" value="window" />
+	            </el-select>
+	          </el-form-item>
+	          <el-form-item label="开始时间" prop="start_at" class="form-item">
+	            <el-date-picker v-model="form.start_at" type="datetime" placeholder="开始时间" />
+	          </el-form-item>
+	          <el-form-item label="结束时间" prop="end_at" class="form-item">
+	            <el-date-picker v-model="form.end_at" type="datetime" placeholder="结束时间" />
+	          </el-form-item>
+	        </div>
+	        <el-form-item
+	          v-if="form.timing_mode === 'window'"
+	          label="个人比赛时长（分钟）"
+	          prop="duration_minutes"
+	        >
+	          <el-input-number v-model="form.duration_minutes" :min="1" :max="24 * 60" :step="30" />
+	          <div class="mode-tip">用户在窗口期点击“开始比赛”后，会获得该固定时长的个人比赛时间。</div>
+	        </el-form-item>
 
         <el-form-item label="比赛题目" prop="problem_ids">
           <el-select
@@ -127,6 +141,8 @@ const form = reactive({
   title: '',
   description: '',
   type: 'oi',
+  timing_mode: 'fixed',
+  duration_minutes: 180,
   start_at: null,
   end_at: null,
   problem_ids: [],
@@ -137,8 +153,25 @@ const form = reactive({
 const rules = {
   title: [{ required: true, message: '请输入比赛名称', trigger: 'blur' }],
   type: [{ required: true, message: '请选择赛制', trigger: 'change' }],
+  timing_mode: [{ required: true, message: '请选择计时模式', trigger: 'change' }],
   start_at: [{ required: true, message: '请选择开始时间', trigger: 'change' }],
   end_at: [{ required: true, message: '请选择结束时间', trigger: 'change' }],
+  duration_minutes: [
+    {
+      validator: (_, value, callback) => {
+        if (form.timing_mode !== 'window') {
+          callback()
+          return
+        }
+        if (!value || value <= 0) {
+          callback(new Error('请输入大于 0 的时长（分钟）'))
+          return
+        }
+        callback()
+      },
+      trigger: 'change',
+    },
+  ],
 }
 
 const problemOptions = ref([])
@@ -175,6 +208,8 @@ async function fetchContest() {
     form.title = contest.title
     form.description = contest.description || ''
     form.type = contest.type
+    form.timing_mode = contest.timing_mode || 'fixed'
+    form.duration_minutes = contest.duration_minutes || 180
     form.start_at = contest.start_at ? new Date(contest.start_at) : null
     form.end_at = contest.end_at ? new Date(contest.end_at) : null
     form.problem_ids = contest.problem_ids || []
@@ -200,6 +235,8 @@ async function handleSubmit() {
       title: form.title,
       description: form.description,
       type: form.type,
+      timing_mode: form.timing_mode,
+      duration_minutes: form.timing_mode === 'window' ? form.duration_minutes : 0,
       start_at: form.start_at,
       end_at: form.end_at,
       problem_ids: form.problem_ids,
@@ -249,6 +286,12 @@ onMounted(() => {
   justify-content: flex-end;
   gap: 12px;
   margin-top: 16px;
+}
+
+.mode-tip {
+  margin-left: 12px;
+  font-size: 12px;
+  color: #909399;
 }
 
 .md-row {

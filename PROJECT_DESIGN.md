@@ -7,13 +7,13 @@
 
 ### 1.2 核心特性
 - **传统 OJ 功能**：用户登录与管理、题目管理、代码提交、自动评测、排行榜等
-- **比赛功能**：支持 OI / IOI 赛制，按题目与用户/分组配置参赛范围
+- **比赛功能**：支持 OI / IOI 赛制，按题目与用户/分组配置参赛范围，支持固定起止与窗口期+个人时长两种计时模式
 - **AI 智能判题**：调用大模型 API（如 DeepSeek）分析代码，检查是否使用指定算法/语言
 - **灵活配置**：每道题目可独立配置是否启用 AI 判题及具体要求
 - **双重结果**：同时返回测试点评测结果和 AI 分析结果
 - **自助修改密码**：用户可在个人中心修改密码
 - **文件操作题目**：可要求从指定文件读入并输出到指定文件
-- **隐藏题可见性**：隐藏题仅对已开赛的参赛用户可见，赛后参赛用户仍可访问
+- **隐藏题可见性**：固定起止比赛在开赛后可见；窗口期比赛需先点击“开始比赛”后可见；比赛结束后参赛用户仍可访问
 - **UI 体系升级**：采用 Swiss 风格重构，统一状态色、表格对齐规范与后台编辑体验
 - **OI 比赛遮罩机制**：进行中的 OI 比赛对普通用户隐藏详细评测信息，仅显示 `Submitted`
 
@@ -229,10 +229,16 @@ oj-system/
 | DELETE | `/:id` | 删除题目 | 管理员 |
 | POST | `/:id/testcase` | 上传测试数据 | 管理员 |
 | POST | `/:id/testcase/zip` | Zip 批量上传测试数据 | 管理员 |
+| POST | `/:id/rejudge` | 整题重测（历史提交重新入队） | 管理员 |
 | GET | `/:id/testcases` | 获取测试点列表 | 管理员 |
 | DELETE | `/:id/testcases` | 清空测试点 | 管理员 |
 
 **隐藏题可见性**：隐藏题仅对管理员或比赛开始后的参赛用户可见，赛后参赛用户仍可访问。
+
+**上传链路参数（当前实现）**：
+- Nginx：`client_max_body_size 200m`，`proxy_send_timeout/proxy_read_timeout = 600s`
+- 后端 Gin：`MaxMultipartMemory = 256MB`
+- 前端：普通请求超时 `180s`，测试点上传超时 `600s` 并展示上传进度
 
 **题目数据结构**
 ```json
@@ -343,6 +349,7 @@ POST /api/v1/submission
 |------|------|------|------|
 | GET | `/list` | 获取比赛列表 | 登录 |
 | GET | `/:id` | 获取比赛详情 | 登录 |
+| POST | `/:id/start` | 开始窗口期个人比赛 | 登录 |
 
 **比赛详情响应结构**
 ```json
@@ -351,6 +358,8 @@ POST /api/v1/submission
         "id": 1,
         "title": "期中赛",
         "type": "oi",
+        "timing_mode": "window",
+        "duration_minutes": 180,
         "start_at": "2026-03-01T08:00:00Z",
         "end_at": "2026-03-01T11:00:00Z",
         "problem_ids": [1, 2, 3],
@@ -360,6 +369,16 @@ POST /api/v1/submission
     "problems": [
         {"id": 1, "title": "A+B", "difficulty": "easy", "has_accepted": true}
     ],
+    "session": {
+        "started": true,
+        "can_start": false,
+        "in_live": true,
+        "start_at": "2026-03-01T08:30:00Z",
+        "end_at": "2026-03-01T11:30:00Z",
+        "remaining_seconds": 5400
+    },
+    "my_live_total": 180,
+    "my_post_total": 20,
     "my_total": 180
 }
 ```
@@ -367,8 +386,10 @@ POST /api/v1/submission
 **说明**：
 - `has_accepted` 仅在以下情况展示：管理员、IOI 赛制、或比赛已结束
 - `has_submitted` 表示是否在比赛时间范围内提交过该题
-- `my_total` 为当前用户总分：IOI 赛制比赛进行中可见，OI 赛制需比赛结束后可见
-- 排名与总分均按每题最后一次提交得分汇总（IOI 赛制同样取最后一次提交）
+- `timing_mode` 支持 `fixed`（固定起止）与 `window`（窗口期 + 个人固定时长）
+- 窗口期比赛中，用户需调用 `POST /contest/:id/start` 启动个人计时
+- `my_live_total` / `my_post_total` 分别表示赛时与赛后得分，`my_total` 为两者之和
+- 管理员排行榜支持 `board_mode=combined|live|post` 三种视图
 
 ### 5.6 统计模块 `/api/v1/statistics`
 
@@ -397,8 +418,8 @@ POST /api/v1/submission
 | POST | `/contests` | 创建比赛 | 管理员 |
 | PUT | `/contests/:id` | 更新比赛 | 管理员 |
 | DELETE | `/contests/:id` | 删除比赛 | 管理员 |
-| GET | `/contests/:id/leaderboard` | 比赛排行榜（管理员） | 管理员 |
-| GET | `/contests/:id/export` | 导出比赛成绩 | 管理员 |
+| GET | `/contests/:id/leaderboard` | 比赛排行榜（管理员，支持 `board_mode`） | 管理员 |
+| GET | `/contests/:id/export` | 导出比赛成绩（支持 `board_mode`） | 管理员 |
 | POST | `/contests/:id/refresh` | 刷新比赛统计（赛后同步） | 管理员 |
 | GET | `/settings/ai` | 获取 AI 设置 | 管理员 |
 | PUT | `/settings/ai` | 更新 AI 设置 | 管理员 |
@@ -454,6 +475,8 @@ POST /api/v1/admin/contests
     "title": "期中赛",
     "description": "可选",
     "type": "oi",                         // oi 或 ioi
+    "timing_mode": "window",              // fixed 或 window（可选，默认 fixed）
+    "duration_minutes": 180,              // timing_mode=window 时必填，单位分钟
     "start_at": "2026-03-01T08:00:00Z",
     "end_at": "2026-03-01T11:00:00Z",
     "problem_ids": [1, 2, 3],
@@ -704,6 +727,8 @@ CREATE TABLE contests (
     title VARCHAR(200) NOT NULL,
     description TEXT,
     type VARCHAR(10) NOT NULL,            -- oi | ioi
+    timing_mode VARCHAR(20) DEFAULT 'fixed', -- fixed | window
+    duration_minutes INTEGER DEFAULT 0,    -- 个人比赛时长（分钟）
     start_at DATETIME,
     end_at DATETIME,
     problem_ids TEXT,                     -- JSON 列表
@@ -713,6 +738,20 @@ CREATE TABLE contests (
     created_by INTEGER,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### 7.6 比赛会话表 `contest_participations`
+```sql
+CREATE TABLE contest_participations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    contest_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    start_at DATETIME,
+    end_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(contest_id, user_id)
 );
 ```
 
@@ -735,6 +774,8 @@ CREATE TABLE contests (
 | 个人中心 | `/profile` | 个人信息、提交统计 |
 | 登录 | `/login` | 用户登录 |
 | 管理后台 | `/admin/*` | 题目管理、用户管理 |
+| 比赛创建（管理） | `/admin/contest/create` | 创建比赛（描述双栏编辑预览） |
+| 比赛编辑（管理） | `/admin/contest/:id/edit` | 编辑比赛（描述双栏编辑预览） |
 
 ### 8.2 核心组件
 
@@ -754,8 +795,9 @@ components/
 └── views/
     ├── problem/ProblemDetail.vue   # 题面/代码分屏
     ├── submission/SubmissionDetail.vue # 评测仪表盘
-    ├── contest/ContestDetail.vue   # 比赛详情与管理员排行榜
-    └── admin/ProblemEdit.vue       # 双栏 Markdown 编辑 + 测试点管理
+    ├── contest/ContestDetail.vue   # 比赛详情、窗口期开赛与赛时/赛后榜切换
+    ├── admin/ProblemEdit.vue       # 双栏 Markdown 编辑 + 测试点管理（含上传进度、整题重测）
+    └── admin/ContestEdit.vue       # 比赛描述双栏 Markdown 编辑与预览
 ```
 
 ---
@@ -906,6 +948,7 @@ scp -r dist/* user@server:/opt/oj/static/
 server {
     listen 80;
     server_name your-domain.com;
+    client_max_body_size 200m;
     
     # 重定向到 HTTPS
     return 301 https://$server_name$request_uri;
@@ -938,6 +981,8 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_send_timeout 600s;
+        proxy_read_timeout 600s;
         
         # WebSocket 支持（如果需要实时推送）
         proxy_http_version 1.1;

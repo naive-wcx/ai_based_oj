@@ -42,13 +42,13 @@ export const adminApi = {
   },
 
   // 获取比赛排行榜
-  getContestLeaderboard(id) {
-    return request.get(`/admin/contests/${id}/leaderboard`)
+  getContestLeaderboard(id, params = {}) {
+    return request.get(`/admin/contests/${id}/leaderboard`, { params })
   },
 
   // 导出比赛成绩
-  exportContestLeaderboard(id) {
-    return request.get(`/admin/contests/${id}/export`, { responseType: 'blob' })
+  exportContestLeaderboard(id, params = {}) {
+    return request.get(`/admin/contests/${id}/export`, { params, responseType: 'blob' })
   },
 
   // 获取 AI 设置

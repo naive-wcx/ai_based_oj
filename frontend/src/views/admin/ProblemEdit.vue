@@ -187,18 +187,22 @@
           </div>
           <el-card shadow="never" class="form-card">
             <el-row :gutter="24">
-              <el-col :span="12">
-                <el-form-item label="时间限制">
-                  <el-input-number v-model="form.time_limit" :min="100" :max="10000" :step="100" style="width: 100%" />
-                  <div class="unit-text">ms</div>
-                </el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item label="内存限制">
-                  <el-input-number v-model="form.memory_limit" :min="16" :max="1024" :step="16" style="width: 100%" />
-                  <div class="unit-text">MB</div>
-                </el-form-item>
-              </el-col>
+	              <el-col :span="12">
+	                <el-form-item label="时间限制">
+	                  <div class="limit-input">
+	                    <el-input-number v-model="form.time_limit" :min="100" :max="10000" :step="100" style="width: 100%" />
+	                    <div class="unit-text">ms</div>
+	                  </div>
+	                </el-form-item>
+	              </el-col>
+	              <el-col :span="12">
+	                <el-form-item label="内存限制">
+	                  <div class="limit-input">
+	                    <el-input-number v-model="form.memory_limit" :min="16" :max="1024" :step="16" style="width: 100%" />
+	                    <div class="unit-text">MB</div>
+	                  </div>
+	                </el-form-item>
+	              </el-col>
             </el-row>
 
             <el-divider />
@@ -207,7 +211,7 @@
               <div class="ai-header">
                 <el-checkbox v-model="form.ai_judge_config.enabled">启用 AI 智能辅助判题</el-checkbox>
               </div>
-              
+
               <div class="ai-body" v-if="form.ai_judge_config.enabled">
                 <el-row :gutter="24">
                   <el-col :span="12">
@@ -269,35 +273,31 @@
           </div>
           <el-card shadow="never" class="form-card">
             <el-tabs type="card" class="testcase-tabs">
-              <el-tab-pane label="文件上传">
-                <div class="upload-row">
-                  <div class="upload-group">
-                    <el-upload
-                      ref="inputUploadRef"
-                      action=""
-                      :auto-upload="false"
-                      :limit="1"
-                      :on-change="(f) => inputFile = f.raw"
-                      :on-remove="() => inputFile = null"
-                      :show-file-list="false"
-                    >
-                      <el-button :type="inputFile ? 'success' : 'default'">
-                        {{ inputFile ? inputFile.name : '选择 Input (.in)' }}
-                      </el-button>
+	              <el-tab-pane label="文件上传">
+	                <div class="upload-row">
+	                  <div class="upload-group">
+	                    <el-upload
+	                      ref="inputUploadRef"
+	                      action=""
+	                      :auto-upload="false"
+	                      :on-change="handleInputFileChange"
+	                      :show-file-list="false"
+	                    >
+	                      <el-button :type="inputFile ? 'success' : 'default'">
+	                        {{ inputFile ? inputFile.name : '选择 Input (.in)' }}
+	                      </el-button>
                     </el-upload>
                     <span class="plus">+</span>
-                    <el-upload
-                      ref="outputUploadRef"
-                      action=""
-                      :auto-upload="false"
-                      :limit="1"
-                      :on-change="(f) => outputFile = f.raw"
-                      :on-remove="() => outputFile = null"
-                      :show-file-list="false"
-                    >
-                      <el-button :type="outputFile ? 'success' : 'default'">
-                        {{ outputFile ? outputFile.name : '选择 Output (.out)' }}
-                      </el-button>
+	                    <el-upload
+	                      ref="outputUploadRef"
+	                      action=""
+	                      :auto-upload="false"
+	                      :on-change="handleOutputFileChange"
+	                      :show-file-list="false"
+	                    >
+	                      <el-button :type="outputFile ? 'success' : 'default'">
+	                        {{ outputFile ? outputFile.name : '选择 Output (.out)' }}
+	                      </el-button>
                     </el-upload>
                   </div>
                   
@@ -306,36 +306,48 @@
                     <el-input-number v-model="testcaseScore" :min="1" :max="100" style="width: 100px" />
                   </div>
                   
-                  <el-button type="primary" @click="uploadTestcase" :loading="uploadingTestcase" :disabled="!inputFile || !outputFile">
-                    上传
-                  </el-button>
-                </div>
-              </el-tab-pane>
-              
-              <el-tab-pane label="Zip 批量上传">
-                <div class="upload-row">
-                  <el-upload
-                    ref="zipUploadRef"
-                    action=""
-                    :auto-upload="false"
-                    :limit="1"
-                    :on-change="(f) => zipFile = f.raw"
-                    :on-remove="() => zipFile = null"
-                    :show-file-list="false"
-                  >
-                    <el-button :type="zipFile ? 'success' : 'warning'" plain>
-                      {{ zipFile ? zipFile.name : '选择 Zip 压缩包' }}
+	                  <el-button type="primary" @click="uploadTestcase" :loading="uploadingTestcase" :disabled="!inputFile || !outputFile">
+	                    上传
+	                  </el-button>
+	                </div>
+	                <div class="upload-progress" v-if="uploadingTestcase || testcaseProgress > 0">
+	                  <el-progress
+	                    :percentage="testcaseProgress"
+	                    :status="testcaseProgressStatus"
+	                    :stroke-width="10"
+	                  />
+	                </div>
+	              </el-tab-pane>
+	              
+	              <el-tab-pane label="Zip 批量上传">
+	                <div class="upload-row">
+	                  <el-upload
+	                    ref="zipUploadRef"
+	                    action=""
+	                    :auto-upload="false"
+	                    :on-change="handleZipFileChange"
+	                    :show-file-list="false"
+	                  >
+	                    <el-button :type="zipFile ? 'success' : 'warning'" plain>
+	                      {{ zipFile ? zipFile.name : '选择 Zip 压缩包' }}
                     </el-button>
                   </el-upload>
                   <el-button type="primary" @click="uploadZip" :loading="uploadingZip" :disabled="!zipFile">
                     一键覆盖上传
                   </el-button>
                 </div>
-                <div class="zip-tip">
-                  注意：批量上传将<b>删除所有现有测试点</b>。Zip 包内应包含成对的 .in 和 .out 文件。
-                </div>
-              </el-tab-pane>
-            </el-tabs>
+	                <div class="zip-tip">
+	                  注意：批量上传将<b>删除所有现有测试点</b>。Zip 包内应包含成对的 .in 和 .out 文件。
+	                </div>
+	                <div class="upload-progress" v-if="uploadingZip || zipProgress > 0">
+	                  <el-progress
+	                    :percentage="zipProgress"
+	                    :status="zipProgressStatus"
+	                    :stroke-width="10"
+	                  />
+	                </div>
+	              </el-tab-pane>
+	            </el-tabs>
 
             <el-table :data="testcases" stripe border style="margin-top: 20px" size="small">
               <el-table-column prop="order_num" label="#" width="60" align="center" />
@@ -352,13 +364,18 @@
               </el-table-column>
             </el-table>
             
-            <div style="margin-top: 16px; text-align: right;" v-if="testcases.length > 0">
-              <el-popconfirm title="确定清空所有测试点？" @confirm="deleteAllTestcases">
-                <template #reference>
-                  <el-button type="danger" text>清空测试点</el-button>
-                </template>
-              </el-popconfirm>
-            </div>
+	            <div class="testcase-actions" v-if="testcases.length > 0">
+	              <el-popconfirm title="确定对该题全部历史提交执行重测？" @confirm="rejudgeProblem">
+	                <template #reference>
+	                  <el-button type="warning" text :loading="rejudgingProblem">整题重测</el-button>
+	                </template>
+	              </el-popconfirm>
+	              <el-popconfirm title="确定清空所有测试点？" @confirm="deleteAllTestcases">
+	                <template #reference>
+	                  <el-button type="danger" text>清空测试点</el-button>
+	                </template>
+	              </el-popconfirm>
+	            </div>
           </el-card>
         </div>
 
@@ -427,13 +444,18 @@ const uploadingTestcase = ref(false)
 const inputFile = ref(null)
 const outputFile = ref(null)
 const testcaseScore = ref(10)
+const testcaseProgress = ref(0)
+const testcaseProgressStatus = ref('')
 const inputUploadRef = ref()
 const outputUploadRef = ref()
 
 // Zip 上传
 const zipFile = ref(null)
 const uploadingZip = ref(false)
+const zipProgress = ref(0)
+const zipProgressStatus = ref('')
 const zipUploadRef = ref()
+const rejudgingProblem = ref(false)
 
 function addSample() {
   form.samples.push({ input: '', output: '' })
@@ -451,6 +473,21 @@ function handleFileIOToggle(value) {
     form.file_input_name = ''
     form.file_output_name = ''
   }
+}
+
+function handleInputFileChange(file) {
+  inputFile.value = file.raw || null
+  inputUploadRef.value?.clearFiles()
+}
+
+function handleOutputFileChange(file) {
+  outputFile.value = file.raw || null
+  outputUploadRef.value?.clearFiles()
+}
+
+function handleZipFileChange(file) {
+  zipFile.value = file.raw || null
+  zipUploadRef.value?.clearFiles()
 }
 
 async function fetchProblem() {
@@ -533,19 +570,34 @@ async function handleSubmit() {
 }
 
 async function uploadTestcase() {
+  if (!inputFile.value || !outputFile.value) return
+
   const formData = new FormData()
   formData.append('input', inputFile.value)
   formData.append('output', outputFile.value)
   formData.append('score', testcaseScore.value)
   
   uploadingTestcase.value = true
+  testcaseProgress.value = 0
+  testcaseProgressStatus.value = ''
   try {
-    await problemApi.uploadTestcase(route.params.id, formData)
+    await problemApi.uploadTestcase(route.params.id, formData, {
+      timeout: 600000,
+      onUploadProgress: (event) => {
+        if (!event.total) return
+        testcaseProgress.value = Math.min(99, Math.round((event.loaded * 100) / event.total))
+      },
+    })
+    testcaseProgress.value = 100
+    testcaseProgressStatus.value = 'success'
     message.success('上传成功')
     inputFile.value = null
     outputFile.value = null
+    inputUploadRef.value?.clearFiles()
+    outputUploadRef.value?.clearFiles()
     fetchTestcases()
   } catch (e) {
+    testcaseProgressStatus.value = 'exception'
     console.error(e)
   } finally {
     uploadingTestcase.value = false
@@ -553,19 +605,53 @@ async function uploadTestcase() {
 }
 
 async function uploadZip() {
+  if (!zipFile.value) return
+
   const formData = new FormData()
   formData.append('zip_file', zipFile.value)
   
   uploadingZip.value = true
+  zipProgress.value = 0
+  zipProgressStatus.value = ''
   try {
-    await problemApi.uploadTestcaseZip(route.params.id, formData)
+    await problemApi.uploadTestcaseZip(route.params.id, formData, {
+      timeout: 600000,
+      onUploadProgress: (event) => {
+        if (!event.total) return
+        zipProgress.value = Math.min(99, Math.round((event.loaded * 100) / event.total))
+      },
+    })
+    zipProgress.value = 100
+    zipProgressStatus.value = 'success'
     message.success('批量上传成功')
     zipFile.value = null
+    zipUploadRef.value?.clearFiles()
     fetchTestcases()
   } catch (e) {
+    zipProgressStatus.value = 'exception'
     console.error(e)
   } finally {
     uploadingZip.value = false
+  }
+}
+
+async function rejudgeProblem() {
+  if (!isEdit.value) return
+
+  rejudgingProblem.value = true
+  try {
+    const res = await problemApi.rejudge(route.params.id)
+    const queued = res.data?.queued ?? 0
+    const failed = res.data?.failed ?? 0
+    if (failed > 0) {
+      message.warning(`已入队 ${queued} 条，失败 ${failed} 条`)
+    } else {
+      message.success(res.message || `已入队 ${queued} 条重测任务`)
+    }
+  } catch (e) {
+    console.error(e)
+  } finally {
+    rejudgingProblem.value = false
   }
 }
 
@@ -758,12 +844,23 @@ onMounted(() => {
   border-style: dashed;
 }
 
+.limit-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+
+  .el-input-number {
+    flex: 1;
+  }
+}
+
 .unit-text {
-  position: absolute;
-  right: 30px;
   color: var(--swiss-text-secondary);
   font-size: 12px;
   pointer-events: none;
+  min-width: 24px;
+  text-align: right;
 }
 
 .ai-config {
@@ -788,6 +885,11 @@ onMounted(() => {
   padding: 20px 0;
 }
 
+.upload-progress {
+  margin-top: 4px;
+  margin-bottom: 6px;
+}
+
 .upload-group {
   display: flex;
   align-items: center;
@@ -802,6 +904,13 @@ onMounted(() => {
   gap: 8px;
   margin-left: auto;
   font-size: 14px;
+}
+
+.testcase-actions {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .zip-tip {

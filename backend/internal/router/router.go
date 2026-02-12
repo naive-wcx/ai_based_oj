@@ -15,6 +15,7 @@ func SetupRouter(mode string) *gin.Engine {
 	}
 
 	r := gin.Default()
+	r.MaxMultipartMemory = 256 << 20
 
 	// 全局中间件
 	r.Use(middleware.CORSMiddleware())
@@ -55,11 +56,12 @@ func SetupRouter(mode string) *gin.Engine {
 			problem.POST("", middleware.AuthMiddleware(), middleware.AdminMiddleware(), problemHandler.Create)
 			problem.PUT("/:id", middleware.AuthMiddleware(), middleware.AdminMiddleware(), problemHandler.Update)
 			problem.DELETE("/:id", middleware.AuthMiddleware(), middleware.AdminMiddleware(), problemHandler.Delete)
-			problem.POST("/:id/testcase", middleware.AuthMiddleware(), middleware.AdminMiddleware(), problemHandler.UploadTestcase)
-			problem.POST("/:id/testcase/zip", middleware.AuthMiddleware(), middleware.AdminMiddleware(), problemHandler.UploadTestcaseZip)
-			problem.GET("/:id/testcases", middleware.AuthMiddleware(), middleware.AdminMiddleware(), problemHandler.GetTestcases)
-			problem.DELETE("/:id/testcases", middleware.AuthMiddleware(), middleware.AdminMiddleware(), problemHandler.DeleteTestcases)
-		}
+				problem.POST("/:id/testcase", middleware.AuthMiddleware(), middleware.AdminMiddleware(), problemHandler.UploadTestcase)
+				problem.POST("/:id/testcase/zip", middleware.AuthMiddleware(), middleware.AdminMiddleware(), problemHandler.UploadTestcaseZip)
+				problem.POST("/:id/rejudge", middleware.AuthMiddleware(), middleware.AdminMiddleware(), problemHandler.RejudgeProblem)
+				problem.GET("/:id/testcases", middleware.AuthMiddleware(), middleware.AdminMiddleware(), problemHandler.GetTestcases)
+				problem.DELETE("/:id/testcases", middleware.AuthMiddleware(), middleware.AdminMiddleware(), problemHandler.DeleteTestcases)
+			}
 
 		// 提交模块
 		submission := v1.Group("/submission")
@@ -77,12 +79,13 @@ func SetupRouter(mode string) *gin.Engine {
 		v1.GET("/statistics", statsHandler.GetPublic)
 
 		// 比赛模块
-		contest := v1.Group("/contest")
-		contest.Use(middleware.AuthMiddleware())
-		{
-			contest.GET("/list", contestHandler.List)
-			contest.GET("/:id", contestHandler.GetByID)
-		}
+			contest := v1.Group("/contest")
+			contest.Use(middleware.AuthMiddleware())
+			{
+				contest.GET("/list", contestHandler.List)
+				contest.GET("/:id", contestHandler.GetByID)
+				contest.POST("/:id/start", contestHandler.StartContest)
+			}
 
 		// 管理员模块
 		admin := v1.Group("/admin")

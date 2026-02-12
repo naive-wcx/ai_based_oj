@@ -12,6 +12,8 @@ type Contest struct {
 	Title          string     `json:"title" gorm:"size:200;not null"`
 	Description    string     `json:"description" gorm:"type:text"`
 	Type           string     `json:"type" gorm:"size:10;not null"` // oi | ioi
+	TimingMode     string     `json:"timing_mode" gorm:"size:20;default:fixed"` // fixed | window
+	DurationMinutes int       `json:"duration_minutes"` // 仅 timing_mode=window 时生效
 	StartAt        time.Time  `json:"start_at"`
 	EndAt          time.Time  `json:"end_at"`
 	ProblemIDs     UintList   `json:"problem_ids" gorm:"type:text"`
@@ -28,6 +30,8 @@ type ContestCreateRequest struct {
 	Title         string    `json:"title" binding:"required,max=200"`
 	Description   string    `json:"description"`
 	Type          string    `json:"type" binding:"required"`
+	TimingMode    string    `json:"timing_mode"`
+	DurationMinutes int     `json:"duration_minutes"`
 	StartAt       time.Time `json:"start_at" binding:"required"`
 	EndAt         time.Time `json:"end_at" binding:"required"`
 	ProblemIDs    []uint    `json:"problem_ids"`
@@ -40,6 +44,8 @@ type ContestUpdateRequest struct {
 	Title         string    `json:"title" binding:"required,max=200"`
 	Description   string    `json:"description"`
 	Type          string    `json:"type" binding:"required"`
+	TimingMode    string    `json:"timing_mode"`
+	DurationMinutes int     `json:"duration_minutes"`
 	StartAt       time.Time `json:"start_at" binding:"required"`
 	EndAt         time.Time `json:"end_at" binding:"required"`
 	ProblemIDs    []uint    `json:"problem_ids"`
@@ -52,6 +58,8 @@ type ContestListItem struct {
 	ID           uint      `json:"id"`
 	Title        string    `json:"title"`
 	Type         string    `json:"type"`
+	TimingMode   string    `json:"timing_mode"`
+	DurationMinutes int    `json:"duration_minutes"`
 	StartAt      time.Time `json:"start_at"`
 	EndAt        time.Time `json:"end_at"`
 	ProblemCount int       `json:"problem_count"`
@@ -64,6 +72,19 @@ type ContestLeaderboardEntry struct {
 	Group    string `json:"group"`
 	Total    int    `json:"total"`
 	Scores   []int  `json:"scores"`
+	LiveTotal int   `json:"live_total"`
+	PostTotal int   `json:"post_total"`
+	LiveScores []int `json:"live_scores,omitempty"`
+	PostScores []int `json:"post_scores,omitempty"`
+}
+
+type ContestSessionState struct {
+	Started          bool       `json:"started"`
+	CanStart         bool       `json:"can_start"`
+	InLive           bool       `json:"in_live"`
+	StartAt          *time.Time `json:"start_at,omitempty"`
+	EndAt            *time.Time `json:"end_at,omitempty"`
+	RemainingSeconds int64      `json:"remaining_seconds"`
 }
 
 // UintList 无符号整数列表（用于 GORM 序列化）

@@ -77,18 +77,27 @@ func (h *ContestHandler) GetByID(c *gin.Context) {
 		return
 	}
 
+	now := time.Now()
+	sessionState, _ := h.service.GetSessionState(contest, userID, now)
+	hasStarted := sessionState != nil && sessionState.Started
+	inLive := sessionState != nil && sessionState.InLive
+
 	acceptedSet := map[uint]struct{}{}
 	submittedSet := map[uint]struct{}{}
-	showAccepted := isAdmin || strings.ToLower(contest.Type) == "ioi" || !time.Now().Before(contest.EndAt)
-	if userID > 0 {
-		submittedIDs, err := h.submissionRepo.GetSubmittedProblemIDsInRange(userID, []uint(contest.ProblemIDs), contest.StartAt, contest.EndAt)
+	showAccepted := isAdmin || strings.ToLower(contest.Type) == "ioi" || (hasStarted && !inLive)
+	if userID > 0 && hasStarted {
+		rangeStart := contest.StartAt
+		if sessionState.StartAt != nil {
+			rangeStart = *sessionState.StartAt
+		}
+		submittedIDs, err := h.submissionRepo.GetSubmittedProblemIDsInRange(userID, []uint(contest.ProblemIDs), rangeStart, now)
 		if err == nil {
 			for _, pid := range submittedIDs {
 				submittedSet[pid] = struct{}{}
 			}
 		}
 		if showAccepted {
-			acceptedIDs, err := h.submissionRepo.GetAcceptedProblemIDsInRange(userID, []uint(contest.ProblemIDs), contest.StartAt, contest.EndAt)
+			acceptedIDs, err := h.submissionRepo.GetAcceptedProblemIDsInRange(userID, []uint(contest.ProblemIDs), rangeStart, now)
 			if err == nil {
 				for _, pid := range acceptedIDs {
 					acceptedSet[pid] = struct{}{}
@@ -100,14 +109,51 @@ func (h *ContestHandler) GetByID(c *gin.Context) {
 	ordered := buildContestProblemList(contest.ProblemIDs, problems, acceptedSet, submittedSet, showAccepted)
 
 	var myTotal *int
-	if userID > 0 {
-		showScore := strings.ToLower(contest.Type) == "ioi" || !time.Now().Before(contest.EndAt)
+	var myLiveTotal *int
+	var myPostTotal *int
+	if userID > 0 && hasStarted {
+		showScore := strings.ToLower(contest.Type) == "ioi" || !inLive
 		if showScore {
-			scoreMap, err := h.submissionRepo.GetUserLastScoresInRange(userID, []uint(contest.ProblemIDs), contest.StartAt, contest.EndAt)
+			liveStart := contest.StartAt
+			liveEnd := contest.EndAt
+			if sessionState.StartAt != nil {
+				liveStart = *sessionState.StartAt
+			}
+			if sessionState.EndAt != nil {
+				liveEnd = *sessionState.EndAt
+			}
+
+			if liveEnd.After(now) {
+				liveEnd = now
+			}
+			liveMap, err := h.submissionRepo.GetUserLastScoresInRange(userID, []uint(contest.ProblemIDs), liveStart, liveEnd)
 			if err == nil {
-				total := 0
+				liveTotal := 0
 				for _, pid := range contest.ProblemIDs {
-					total += scoreMap[pid]
+					liveTotal += liveMap[pid]
+				}
+				myLiveTotal = &liveTotal
+			}
+
+			postStart := liveEnd.Add(time.Millisecond)
+			if !postStart.After(now) {
+				postMap, err := h.submissionRepo.GetUserLastScoresInRange(userID, []uint(contest.ProblemIDs), postStart, now)
+				if err == nil {
+					postTotal := 0
+					for _, pid := range contest.ProblemIDs {
+						postTotal += postMap[pid]
+					}
+					myPostTotal = &postTotal
+				}
+			}
+
+			if myLiveTotal != nil || myPostTotal != nil {
+				total := 0
+				if myLiveTotal != nil {
+					total += *myLiveTotal
+				}
+				if myPostTotal != nil {
+					total += *myPostTotal
 				}
 				myTotal = &total
 			}
@@ -117,7 +163,39 @@ func (h *ContestHandler) GetByID(c *gin.Context) {
 	c.JSON(http.StatusOK, model.Success(gin.H{
 		"contest":  contest,
 		"problems": ordered,
+		"session":  sessionState,
+		"my_live_total": myLiveTotal,
+		"my_post_total": myPostTotal,
 		"my_total": myTotal,
+	}))
+}
+
+// StartContest 开始窗口期比赛会话
+// POST /api/v1/contest/:id/start
+func (h *ContestHandler) StartContest(c *gin.Context) {
+	contestID := getUintParam(c, "id")
+	if contestID == 0 {
+		c.JSON(http.StatusBadRequest, model.BadRequest("比赛 ID 无效"))
+		return
+	}
+	userID := middleware.GetUserID(c)
+	isAdmin := middleware.IsAdmin(c)
+
+	participation, contest, err := h.service.StartWindowContest(contestID, userID, isAdmin)
+	if err != nil {
+		if err.Error() == "无权限访问该比赛" {
+			c.JSON(http.StatusForbidden, model.Forbidden(err.Error()))
+			return
+		}
+		c.JSON(http.StatusBadRequest, model.BadRequest(err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, model.Success(gin.H{
+		"contest_id": contest.ID,
+		"user_id": userID,
+		"start_at": participation.StartAt,
+		"end_at": participation.EndAt,
 	}))
 }
 
@@ -207,7 +285,8 @@ func (h *ContestHandler) GetLeaderboard(c *gin.Context) {
 		return
 	}
 
-	contest, problemIDs, entries, err := h.service.GetLeaderboard(contestID)
+	mode := c.DefaultQuery("board_mode", "combined")
+	contest, problemIDs, entries, boardMode, err := h.service.GetLeaderboard(contestID, mode)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, model.BadRequest(err.Error()))
 		return
@@ -217,6 +296,7 @@ func (h *ContestHandler) GetLeaderboard(c *gin.Context) {
 		"contest":     contest,
 		"problem_ids": problemIDs,
 		"entries":     entries,
+		"board_mode":  boardMode,
 	}))
 }
 
@@ -229,22 +309,31 @@ func (h *ContestHandler) ExportLeaderboard(c *gin.Context) {
 		return
 	}
 
-	_, problemIDs, entries, err := h.service.GetLeaderboard(contestID)
+	mode := c.DefaultQuery("board_mode", "combined")
+	_, problemIDs, entries, boardMode, err := h.service.GetLeaderboard(contestID, mode)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, model.BadRequest(err.Error()))
 		return
 	}
 
-	filename := fmt.Sprintf("contest_%d_leaderboard.csv", contestID)
+	filename := fmt.Sprintf("contest_%d_leaderboard_%s.csv", contestID, boardMode)
 	c.Header("Content-Type", "text/csv; charset=utf-8")
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
 
 	writer := csv.NewWriter(c.Writer)
 	defer writer.Flush()
 
-	header := []string{"user_id", "username", "group", "total"}
-	for _, pid := range problemIDs {
-		header = append(header, fmt.Sprintf("P%d", pid))
+	header := []string{"user_id", "username", "group"}
+	if boardMode == "combined" {
+		header = append(header, "live_total", "post_total", "combined_total")
+		for _, pid := range problemIDs {
+			header = append(header, fmt.Sprintf("P%d_live", pid), fmt.Sprintf("P%d_post", pid), fmt.Sprintf("P%d_combined", pid))
+		}
+	} else {
+		header = append(header, "total")
+		for _, pid := range problemIDs {
+			header = append(header, fmt.Sprintf("P%d", pid))
+		}
 	}
 	_ = writer.Write(header)
 
@@ -253,10 +342,25 @@ func (h *ContestHandler) ExportLeaderboard(c *gin.Context) {
 			strconv.FormatUint(uint64(entry.UserID), 10),
 			entry.Username,
 			entry.Group,
-			strconv.Itoa(entry.Total),
 		}
-		for _, score := range entry.Scores {
-			row = append(row, strconv.Itoa(score))
+		if boardMode == "combined" {
+			row = append(row, strconv.Itoa(entry.LiveTotal), strconv.Itoa(entry.PostTotal), strconv.Itoa(entry.LiveTotal+entry.PostTotal))
+			for i := range problemIDs {
+				liveScore := 0
+				postScore := 0
+				if i < len(entry.LiveScores) {
+					liveScore = entry.LiveScores[i]
+				}
+				if i < len(entry.PostScores) {
+					postScore = entry.PostScores[i]
+				}
+				row = append(row, strconv.Itoa(liveScore), strconv.Itoa(postScore), strconv.Itoa(liveScore+postScore))
+			}
+		} else {
+			row = append(row, strconv.Itoa(entry.Total))
+			for _, score := range entry.Scores {
+				row = append(row, strconv.Itoa(score))
+			}
 		}
 		_ = writer.Write(row)
 	}

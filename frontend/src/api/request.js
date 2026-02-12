@@ -3,7 +3,7 @@ import { message } from '@/utils/message'
 
 const request = axios.create({
   baseURL: '/api/v1',
-  timeout: 60000,
+  timeout: 180000,
 })
 
 // 请求拦截器

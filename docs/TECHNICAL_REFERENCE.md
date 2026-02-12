@@ -36,6 +36,7 @@ OJ/
 │       │   ├── problem.go           # 题目模型
 │       │   ├── submission.go        # 提交模型
 │       │   ├── contest.go           # 比赛模型
+│       │   ├── contest_participation.go # 窗口期比赛会话模型
 │       │   ├── setting.go           # 系统设置模型
 │       │   └── response.go          # 响应结构
 │       ├── repository/
@@ -44,6 +45,7 @@ OJ/
 │       │   ├── problem_repo.go      # 题目数据访问
 │       │   ├── submission_repo.go   # 提交数据访问
 │       │   ├── contest_repo.go      # 比赛数据访问
+│       │   ├── contest_participation_repo.go # 比赛会话数据访问
 │       │   └── setting_repo.go      # 设置数据访问
 │       ├── service/
 │       │   ├── user_service.go      # 用户业务逻辑
@@ -607,7 +609,8 @@ type Claims struct {
 ```
 
 **说明**:
-- `is_public=false` 表示隐藏题：仅管理员或参赛用户可访问（要求比赛已开始），赛后参赛用户仍可访问。
+- `is_public=false` 表示隐藏题：仅管理员或参赛用户可访问。
+- 固定起止比赛：开赛后可访问；窗口期比赛：需先开始个人会话后可访问；比赛结束后参赛用户仍可访问。
 
 **成功响应** (200):
 ```json
@@ -645,6 +648,11 @@ type Claims struct {
 ---
 
 ### 3.2 题目模块 `/api/v1/problem`
+
+**上传链路（当前默认）**:
+- 前端请求超时默认 `180s`，测试点上传接口单独使用 `600s` 超时并上报上传进度。
+- Nginx 代理建议设置：`client_max_body_size 200m`、`proxy_send_timeout 600s`、`proxy_read_timeout 600s`。
+- 后端 Gin：`MaxMultipartMemory = 256MB`。
 
 #### GET `/list` - 获取题目列表
 
@@ -693,7 +701,7 @@ type Claims struct {
 **路径参数**: `id` - 题目 ID
 **说明**: 
 - 登录状态下会返回 `has_accepted` 标识用户是否已通过题目
-- 当题目为隐藏题时，仅管理员或参赛用户可访问（要求比赛已开始），赛后参赛用户仍可访问
+- 当题目为隐藏题时，仅管理员或参赛用户可访问；固定起止比赛要求已开赛，窗口期比赛要求个人会话已开始；赛后参赛用户仍可访问
 
 **成功响应** (200):
 ```json
@@ -812,6 +820,30 @@ type Claims struct {
 **说明**:
 - 该操作会覆盖原有测试点（先删除再重建）。
 - 会按文件名中的数字顺序生成测试点序号并自动分配分值总和 100。
+- Zip 文件在服务端保存临时文件后，由后端服务解压并落盘到题目数据目录。
+
+---
+
+#### POST `/:id/rejudge` - 整题重测（管理员）
+
+**认证**: 需要 Bearer Token + 管理员权限
+
+**说明**:
+- 将该题目的历史提交批量重置为 `Pending` 后重新入队判题。
+- 正在 `Pending/Judging` 的提交不会重复入队。
+
+**成功响应** (200):
+```json
+{
+    "code": 200,
+    "message": "整题重测任务已提交",
+    "data": {
+        "total": 120,
+        "queued": 120,
+        "failed": 0
+    }
+}
+```
 
 ---
 
@@ -1012,6 +1044,8 @@ type Claims struct {
                 "id": 1,
                 "title": "期中赛",
                 "type": "oi",
+                "timing_mode": "window",
+                "duration_minutes": 180,
                 "start_at": "2026-03-01T08:00:00Z",
                 "end_at": "2026-03-01T11:00:00Z",
                 "problem_count": 5
@@ -1027,7 +1061,9 @@ type Claims struct {
 **说明**:
 - `has_accepted` 仅在以下情况展示：管理员、IOI 赛制、或比赛已结束；进行中的 OI 对普通用户不展示通过信息
 - `has_submitted` 表示在比赛时间范围内是否提交过该题
-- `my_total` 为当前用户总分：IOI 赛制比赛进行中可见，OI 赛制需比赛结束后可见
+- `timing_mode` 支持 `fixed`（固定起止）与 `window`（窗口期 + 个人固定时长）
+- 窗口期比赛中，用户需先调用 `POST /contest/:id/start` 启动个人比赛会话
+- `my_live_total` / `my_post_total` 分别表示赛时/赛后得分，`my_total` 为两者之和
 
 **成功响应** (200):
 ```json
@@ -1039,6 +1075,8 @@ type Claims struct {
             "id": 1,
             "title": "期中赛",
             "type": "oi",
+            "timing_mode": "window",
+            "duration_minutes": 180,
             "start_at": "2026-03-01T08:00:00Z",
             "end_at": "2026-03-01T11:00:00Z",
             "problem_ids": [1, 2, 3],
@@ -1048,7 +1086,39 @@ type Claims struct {
         "problems": [
             {"id": 1, "title": "A+B", "difficulty": "easy", "has_accepted": false, "has_submitted": true}
         ],
+        "session": {
+            "started": true,
+            "can_start": false,
+            "in_live": true,
+            "start_at": "2026-03-01T08:30:00Z",
+            "end_at": "2026-03-01T11:30:00Z",
+            "remaining_seconds": 5400
+        },
+        "my_live_total": 160,
+        "my_post_total": 20,
         "my_total": 180
+    }
+}
+```
+
+#### POST `/:id/start` - 开始窗口期个人比赛
+
+**认证**: 需要 Bearer Token
+
+**说明**:
+- 仅 `timing_mode=window` 的比赛可调用。
+- 用户在比赛窗口期内调用后，系统会创建或复用其个人会话（`start_at/end_at`）。
+
+**成功响应** (200):
+```json
+{
+    "code": 200,
+    "message": "success",
+    "data": {
+        "contest_id": 1,
+        "user_id": 10,
+        "start_at": "2026-03-01T08:30:00Z",
+        "end_at": "2026-03-01T11:30:00Z"
     }
 }
 ```
@@ -1167,6 +1237,8 @@ type Claims struct {
     "title": "期中赛",
     "description": "可选",
     "type": "oi",                         // oi 或 ioi
+    "timing_mode": "window",              // fixed 或 window（可选，默认 fixed）
+    "duration_minutes": 180,              // timing_mode=window 时必填，单位分钟
     "start_at": "2026-03-01T08:00:00Z",
     "end_at": "2026-03-01T11:00:00Z",
     "problem_ids": [1, 2, 3],
@@ -1177,6 +1249,7 @@ type Claims struct {
 
 **说明**:
 - `allowed_users` 与 `allowed_groups` 至少填写一个，否则普通用户无法看到/参加比赛。
+- 当 `timing_mode=window` 时，`duration_minutes` 必须大于 0。
 
 #### PUT `/contests/:id` - 更新比赛
 
@@ -1197,6 +1270,11 @@ type Claims struct {
 #### GET `/contests/:id/leaderboard` - 比赛排行榜（管理员）
 
 **认证**: 需要 Bearer Token + 管理员权限
+**查询参数**:
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `board_mode` | string | 榜单模式：`combined`（默认，赛时|赛后）、`live`（赛时）、`post`（赛后） |
+
 **说明**: OI/IOI 赛制均按每题最后一次提交得分汇总
 
 **成功响应** (200):
@@ -1210,6 +1288,7 @@ type Claims struct {
             "title": "期中赛",
             "type": "oi"
         },
+        "board_mode": "combined",
         "problem_ids": [1, 2, 3],
         "entries": [
             {
@@ -1217,7 +1296,11 @@ type Claims struct {
                 "username": "student01",
                 "group": "ClassA",
                 "total": 240,
-                "scores": [80, 80, 80]
+                "scores": [80, 80, 80],
+                "live_total": 220,
+                "post_total": 20,
+                "live_scores": [80, 80, 60],
+                "post_scores": [0, 0, 20]
             }
         ]
     }
@@ -1227,6 +1310,7 @@ type Claims struct {
 #### GET `/contests/:id/export` - 导出比赛成绩（管理员）
 
 **认证**: 需要 Bearer Token + 管理员权限
+**查询参数**: 同排行榜接口（`board_mode`）
 
 **响应**: `text/csv` 文件下载
 
@@ -1389,6 +1473,8 @@ type Claims struct {
 | title | VARCHAR(200) | 比赛名称 |
 | description | TEXT | 比赛描述 |
 | type | VARCHAR(10) | 赛制：oi/ioi |
+| timing_mode | VARCHAR(20) | 计时模式：fixed/window |
+| duration_minutes | INTEGER | 窗口期个人比赛时长（分钟） |
 | start_at | DATETIME | 开始时间 |
 | end_at | DATETIME | 结束时间 |
 | problem_ids | TEXT | 题目 ID 列表（JSON） |
@@ -1396,6 +1482,17 @@ type Claims struct {
 | allowed_groups | TEXT | 允许分组列表（JSON） |
 | is_stats_synced | BOOLEAN | 赛后统计是否已同步 |
 | created_by | INTEGER | 创建者 ID |
+| created_at | DATETIME | 创建时间 |
+| updated_at | DATETIME | 更新时间 |
+
+#### contest_participations 表
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | INTEGER | 主键，自增 |
+| contest_id | INTEGER | 比赛 ID |
+| user_id | INTEGER | 用户 ID |
+| start_at | DATETIME | 个人开始时间 |
+| end_at | DATETIME | 个人结束时间 |
 | created_at | DATETIME | 创建时间 |
 | updated_at | DATETIME | 更新时间 |
 
@@ -1698,6 +1795,8 @@ IF AI 判定未通过:
 | `/profile` | Profile | 需登录 |
 | `/admin/*` | AdminLayout | 需管理员 |
 | `/admin/contests` | ContestManage | 需管理员 |
+| `/admin/contest/create` | ContestEdit | 需管理员 |
+| `/admin/contest/:id/edit` | ContestEdit | 需管理员 |
 | `/admin/settings` | Settings | 需管理员 |
 
 ### 7.4 主要组件
@@ -1720,7 +1819,9 @@ IF AI 判定未通过:
 - 列表页（题目、提交、比赛、排行榜）统一表格样式与居中布局。
 - 题目详情页采用 splitpanes 分栏：左侧题面，右侧 Monaco 编辑器；支持 `fontSize` 和 `tabSize` 调整。
 - 提交详情与比赛详情使用指标仪表盘风格，突出状态、分数、时间与内存信息。
-- 管理后台 `ProblemEdit` 支持 Markdown 双栏编辑预览、单文件测试点上传与 Zip 覆盖上传。
+- 管理后台 `ProblemEdit` 支持 Markdown 双栏编辑预览、单文件/Zip 上传进度、整题重测。
+- 管理后台 `ContestEdit` 的比赛描述支持与题目管理一致的双栏 Markdown 编辑/预览。
+- 比赛详情页在窗口期模式下支持“开始比赛”会话状态展示；管理员排行榜支持 `赛时|赛后 / 赛时 / 赛后` 切换与对应导出。
 
 ---
 
@@ -1784,6 +1885,10 @@ curl -X POST http://localhost:8080/api/v1/submission \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <token>" \
   -d '{"problem_id":1,"language":"cpp","code":"..."}'
+
+# 整题重测（管理员）
+curl -X POST http://localhost:8080/api/v1/problem/1/rejudge \
+  -H "Authorization: Bearer <admin_token>"
 ```
 
 ### 8.2 前端调试

@@ -335,7 +335,5 @@ func SubmitToQueue(submission *model.Submission) error {
 	}
 
 	// 加入队列
-	queue.GetQueue().Push(task)
-
-	return nil
+	return queue.GetQueue().Push(task)
 }

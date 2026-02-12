@@ -20,6 +20,7 @@ type SubmissionService struct {
 	problemRepo *repository.ProblemRepository
 	userRepo    *repository.UserRepository
 	contestRepo *repository.ContestRepository
+	participationRepo *repository.ContestParticipationRepository
 }
 
 func NewSubmissionService() *SubmissionService {
@@ -28,6 +29,7 @@ func NewSubmissionService() *SubmissionService {
 		problemRepo: repository.NewProblemRepository(),
 		userRepo:    repository.NewUserRepository(),
 		contestRepo: repository.NewContestRepository(),
+		participationRepo: repository.NewContestParticipationRepository(),
 	}
 }
 
@@ -317,7 +319,17 @@ func (s *SubmissionService) canAccessHiddenProblem(problemID uint, userID uint) 
 		if !containsUint([]uint(contest.ProblemIDs), problemID) {
 			continue
 		}
-		if canAccessContest(&contest, userID, user.Group) {
+		if !canAccessContest(&contest, userID, user.Group) {
+			continue
+		}
+		if normalizeContestTimingMode(contest.TimingMode) != contestTimingWindow {
+			return true, nil
+		}
+		if !now.Before(contest.EndAt) {
+			return true, nil
+		}
+		participation, err := s.participationRepo.GetByContestAndUser(contest.ID, userID)
+		if err == nil && participation != nil && !now.Before(participation.StartAt) {
 			return true, nil
 		}
 	}

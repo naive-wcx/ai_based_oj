@@ -1,6 +1,8 @@
 package queue
 
 import (
+	"errors"
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -39,12 +41,16 @@ func GetQueue() *JudgeQueue {
 }
 
 // Push 添加判题任务
-func (q *JudgeQueue) Push(task *JudgeTask) {
+func (q *JudgeQueue) Push(task *JudgeTask) error {
+	if q == nil {
+		return errors.New("判题队列未初始化")
+	}
 	select {
 	case q.tasks <- task:
 		log.Printf("[Queue] 添加判题任务: submission_id=%d", task.Submission.ID)
-	default:
-		log.Printf("[Queue] 队列已满，丢弃任务: submission_id=%d", task.Submission.ID)
+		return nil
+	case <-time.After(3 * time.Second):
+		return fmt.Errorf("判题队列繁忙: submission_id=%d", task.Submission.ID)
 	}
 }
 

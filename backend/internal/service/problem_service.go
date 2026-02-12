@@ -22,6 +22,7 @@ type ProblemService struct {
 	submissionRepo *repository.SubmissionRepository
 	contestRepo *repository.ContestRepository
 	userRepo *repository.UserRepository
+	participationRepo *repository.ContestParticipationRepository
 }
 
 func NewProblemService() *ProblemService {
@@ -30,6 +31,7 @@ func NewProblemService() *ProblemService {
 		submissionRepo: repository.NewSubmissionRepository(),
 		contestRepo: repository.NewContestRepository(),
 		userRepo: repository.NewUserRepository(),
+		participationRepo: repository.NewContestParticipationRepository(),
 	}
 }
 
@@ -260,7 +262,19 @@ func (s *ProblemService) canAccessHiddenProblem(problemID uint, userID uint) boo
 		if !containsUint([]uint(contest.ProblemIDs), problemID) {
 			continue
 		}
-		if canAccessContest(&contest, userID, user.Group) {
+		if !canAccessContest(&contest, userID, user.Group) {
+			continue
+		}
+
+		if normalizeContestTimingMode(contest.TimingMode) != contestTimingWindow {
+			return true
+		}
+		if !now.Before(contest.EndAt) {
+			return true
+		}
+
+		participation, err := s.participationRepo.GetByContestAndUser(contest.ID, userID)
+		if err == nil && participation != nil && !now.Before(participation.StartAt) {
 			return true
 		}
 	}
@@ -335,6 +349,30 @@ func (s *ProblemService) DeleteTestcases(problemID uint) error {
 	}
 
 	return s.repo.DeleteTestcases(problemID)
+}
+
+func (s *ProblemService) PrepareProblemRejudge(problemID uint) ([]model.Submission, error) {
+	if _, err := s.repo.GetByID(problemID); err != nil {
+		return nil, errors.New("题目不存在")
+	}
+
+	submissions, err := s.submissionRepo.ListRejudgeCandidatesByProblem(problemID)
+	if err != nil {
+		return nil, errors.New("获取提交记录失败")
+	}
+	if len(submissions) == 0 {
+		return []model.Submission{}, nil
+	}
+
+	ids := make([]uint, 0, len(submissions))
+	for _, submission := range submissions {
+		ids = append(ids, submission.ID)
+	}
+	if err := s.submissionRepo.ResetForRejudge(ids); err != nil {
+		return nil, errors.New("重置提交状态失败")
+	}
+
+	return submissions, nil
 }
 
 func normalizeFileIO(req *model.ProblemCreateRequest) (bool, string, string, error) {

@@ -8,4 +8,8 @@ export const contestApi = {
   getById(id) {
     return request.get(`/contest/${id}`)
   },
+
+  start(id) {
+    return request.post(`/contest/${id}/start`)
+  },
 }

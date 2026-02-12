@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/gin-gonic/gin"
+	"oj-system/internal/judge"
 	"oj-system/internal/middleware"
 	"oj-system/internal/model"
 	"oj-system/internal/service"
@@ -252,4 +253,47 @@ func (h *ProblemHandler) DeleteTestcases(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, model.SuccessMessage("删除成功", nil))
+}
+
+// RejudgeProblem 重新评测题目的所有历史提交（管理员）
+// POST /api/v1/problem/:id/rejudge
+func (h *ProblemHandler) RejudgeProblem(c *gin.Context) {
+	id := getUintParam(c, "id")
+	if id == 0 {
+		c.JSON(http.StatusBadRequest, model.BadRequest("题目 ID 无效"))
+		return
+	}
+
+	submissions, err := h.service.PrepareProblemRejudge(id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, model.BadRequest(err.Error()))
+		return
+	}
+	if len(submissions) == 0 {
+		c.JSON(http.StatusOK, model.SuccessMessage("暂无可重测的历史提交", gin.H{
+			"total":  0,
+			"queued": 0,
+			"failed": 0,
+		}))
+		return
+	}
+
+	failed := 0
+	for i := range submissions {
+		if err := judge.SubmitToQueue(&submissions[i]); err != nil {
+			failed++
+		}
+	}
+
+	queued := len(submissions) - failed
+	message := "整题重测任务已提交"
+	if failed > 0 {
+		message = "部分提交进入重测队列失败"
+	}
+
+	c.JSON(http.StatusOK, model.SuccessMessage(message, gin.H{
+		"total":  len(submissions),
+		"queued": queued,
+		"failed": failed,
+	}))
 }

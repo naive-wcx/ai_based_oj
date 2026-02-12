@@ -15,6 +15,7 @@ type ContestService struct {
 	problemRepo *repository.ProblemRepository
 	userRepo    *repository.UserRepository
 	submissionRepo *repository.SubmissionRepository
+	participationRepo *repository.ContestParticipationRepository
 }
 
 func NewContestService() *ContestService {
@@ -23,12 +24,18 @@ func NewContestService() *ContestService {
 		problemRepo: repository.NewProblemRepository(),
 		userRepo:    repository.NewUserRepository(),
 		submissionRepo: repository.NewSubmissionRepository(),
+		participationRepo: repository.NewContestParticipationRepository(),
 	}
 }
 
 func (s *ContestService) Create(req *model.ContestCreateRequest, createdBy uint) (*model.Contest, error) {
-	if err := validateContestRequest(req.Title, req.Type, req.StartAt, req.EndAt); err != nil {
+	timingMode := normalizeContestTimingMode(req.TimingMode)
+	durationMinutes := req.DurationMinutes
+	if err := validateContestRequest(req.Title, req.Type, req.StartAt, req.EndAt, timingMode, durationMinutes); err != nil {
 		return nil, err
+	}
+	if timingMode != contestTimingWindow {
+		durationMinutes = 0
 	}
 
 	problemIDs := uniqueUintList(req.ProblemIDs)
@@ -46,6 +53,8 @@ func (s *ContestService) Create(req *model.ContestCreateRequest, createdBy uint)
 		Title:         strings.TrimSpace(req.Title),
 		Description:   strings.TrimSpace(req.Description),
 		Type:          strings.ToLower(strings.TrimSpace(req.Type)),
+		TimingMode:    timingMode,
+		DurationMinutes: durationMinutes,
 		StartAt:       req.StartAt,
 		EndAt:         req.EndAt,
 		ProblemIDs:    model.UintList(problemIDs),
@@ -62,8 +71,13 @@ func (s *ContestService) Create(req *model.ContestCreateRequest, createdBy uint)
 }
 
 func (s *ContestService) Update(id uint, req *model.ContestUpdateRequest) (*model.Contest, error) {
-	if err := validateContestRequest(req.Title, req.Type, req.StartAt, req.EndAt); err != nil {
+	timingMode := normalizeContestTimingMode(req.TimingMode)
+	durationMinutes := req.DurationMinutes
+	if err := validateContestRequest(req.Title, req.Type, req.StartAt, req.EndAt, timingMode, durationMinutes); err != nil {
 		return nil, err
+	}
+	if timingMode != contestTimingWindow {
+		durationMinutes = 0
 	}
 
 	contest, err := s.contestRepo.GetByID(id)
@@ -85,6 +99,8 @@ func (s *ContestService) Update(id uint, req *model.ContestUpdateRequest) (*mode
 	contest.Title = strings.TrimSpace(req.Title)
 	contest.Description = strings.TrimSpace(req.Description)
 	contest.Type = strings.ToLower(strings.TrimSpace(req.Type))
+	contest.TimingMode = timingMode
+	contest.DurationMinutes = durationMinutes
 	contest.StartAt = req.StartAt
 	contest.EndAt = req.EndAt
 	contest.ProblemIDs = model.UintList(problemIDs)
@@ -129,6 +145,101 @@ func (s *ContestService) GetByIDForUser(id uint, userID uint, isAdmin bool) (*mo
 	}
 
 	return contest, nil
+}
+
+func (s *ContestService) StartWindowContest(contestID uint, userID uint, isAdmin bool) (*model.ContestParticipation, *model.Contest, error) {
+	contest, err := s.contestRepo.GetByID(contestID)
+	if err != nil {
+		return nil, nil, errors.New("比赛不存在")
+	}
+	if normalizeContestTimingMode(contest.TimingMode) != contestTimingWindow {
+		return nil, nil, errors.New("当前比赛不是窗口期模式")
+	}
+	now := time.Now()
+	if now.Before(contest.StartAt) {
+		return nil, nil, errors.New("比赛尚未开始")
+	}
+	if !now.Before(contest.EndAt) {
+		return nil, nil, errors.New("比赛窗口期已结束")
+	}
+	if !isAdmin {
+		user, err := s.userRepo.GetByID(userID)
+		if err != nil {
+			return nil, nil, errors.New("用户不存在")
+		}
+		if !canAccessContest(contest, userID, user.Group) {
+			return nil, nil, errors.New("无权限访问该比赛")
+		}
+	}
+
+	if existing, err := s.participationRepo.GetByContestAndUser(contestID, userID); err == nil {
+		return existing, contest, nil
+	}
+
+	duration := time.Duration(contest.DurationMinutes) * time.Minute
+	endAt := now.Add(duration)
+	if endAt.After(contest.EndAt) {
+		endAt = contest.EndAt
+	}
+	participation := &model.ContestParticipation{
+		ContestID: contestID,
+		UserID:    userID,
+		StartAt:   now,
+		EndAt:     endAt,
+	}
+
+	created, err := s.participationRepo.GetOrCreate(participation)
+	if err != nil {
+		return nil, nil, errors.New("创建比赛会话失败")
+	}
+	return created, contest, nil
+}
+
+func (s *ContestService) GetSessionState(contest *model.Contest, userID uint, now time.Time) (*model.ContestSessionState, error) {
+	state := &model.ContestSessionState{}
+	if contest == nil || userID == 0 {
+		return state, nil
+	}
+
+	mode := normalizeContestTimingMode(contest.TimingMode)
+	if mode != contestTimingWindow {
+		start := contest.StartAt
+		end := contest.EndAt
+		state.Started = !now.Before(start)
+		state.InLive = state.Started && now.Before(end)
+		state.CanStart = false
+		if state.Started {
+			state.StartAt = &start
+			state.EndAt = &end
+			if state.InLive {
+				state.RemainingSeconds = int64(end.Sub(now).Seconds())
+			}
+		}
+		return state, nil
+	}
+
+	if now.Before(contest.StartAt) {
+		return state, nil
+	}
+
+	participation, err := s.participationRepo.GetByContestAndUser(contest.ID, userID)
+	if err != nil {
+		state.CanStart = now.Before(contest.EndAt)
+		return state, nil
+	}
+
+	state.Started = true
+	state.CanStart = false
+	state.InLive = now.Before(participation.EndAt)
+	start := participation.StartAt
+	end := participation.EndAt
+	state.StartAt = &start
+	state.EndAt = &end
+	if state.InLive {
+		state.RemainingSeconds = int64(participation.EndAt.Sub(now).Seconds())
+	}
+
+	return state, nil
 }
 
 func (s *ContestService) ListForUser(page, size int, userID uint, isAdmin bool) ([]model.ContestListItem, int64, error) {
@@ -177,27 +288,44 @@ func (s *ContestService) GetProblemsByIDs(ids []uint) ([]model.Problem, error) {
 	return s.problemRepo.GetByIDs(ids)
 }
 
-func (s *ContestService) GetLeaderboard(contestID uint) (*model.Contest, []uint, []model.ContestLeaderboardEntry, error) {
+func (s *ContestService) GetLeaderboard(contestID uint, boardMode string) (*model.Contest, []uint, []model.ContestLeaderboardEntry, string, error) {
 	contest, err := s.contestRepo.GetByID(contestID)
 	if err != nil {
-		return nil, nil, nil, errors.New("比赛不存在")
+		return nil, nil, nil, "", errors.New("比赛不存在")
 	}
+	boardMode = normalizeLeaderboardMode(boardMode)
 
 	problemIDs := []uint(contest.ProblemIDs)
-	submissions, err := s.submissionRepo.ListForContest(problemIDs, contest.StartAt, contest.EndAt)
+	submissions, err := s.submissionRepo.ListForContestSince(problemIDs, contest.StartAt)
 	if err != nil {
-		return nil, nil, nil, errors.New("获取提交记录失败")
+		return nil, nil, nil, "", errors.New("获取提交记录失败")
+	}
+	now := time.Now()
+
+	participationMap := map[uint]model.ContestParticipation{}
+	if normalizeContestTimingMode(contest.TimingMode) == contestTimingWindow {
+		participations, err := s.participationRepo.ListByContest(contestID)
+		if err != nil {
+			return nil, nil, nil, "", errors.New("获取比赛会话失败")
+		}
+		for _, participation := range participations {
+			participationMap[participation.UserID] = participation
+		}
 	}
 
 	type userEntry struct {
 		userID   uint
 		username string
 		group    string
-		scores   map[uint]int
+		liveScores map[uint]int
+		postScores map[uint]int
 	}
 
 	userMap := make(map[uint]*userEntry)
 	for _, sub := range submissions {
+		if sub.CreatedAt.After(now) {
+			continue
+		}
 		if !canAccessContest(contest, sub.UserID, sub.Group) {
 			continue
 		}
@@ -208,40 +336,77 @@ func (s *ContestService) GetLeaderboard(contestID uint) (*model.Contest, []uint,
 				userID:   sub.UserID,
 				username: sub.Username,
 				group:    sub.Group,
-				scores:   make(map[uint]int),
+				liveScores: make(map[uint]int),
+				postScores: make(map[uint]int),
 			}
 			userMap[sub.UserID] = entry
 		}
 
-		entry.scores[sub.ProblemID] = sub.Score
+		phase := classifySubmissionPhase(contest, participationMap[sub.UserID], sub.CreatedAt)
+		if phase == leaderboardPhaseLive {
+			entry.liveScores[sub.ProblemID] = sub.Score
+		} else if phase == leaderboardPhasePost {
+			entry.postScores[sub.ProblemID] = sub.Score
+		}
 	}
 
 	entries := make([]model.ContestLeaderboardEntry, 0, len(userMap))
 	for _, entry := range userMap {
-		scores := make([]int, 0, len(problemIDs))
-		total := 0
+		liveScores := make([]int, 0, len(problemIDs))
+		postScores := make([]int, 0, len(problemIDs))
+		displayScores := make([]int, 0, len(problemIDs))
+		liveTotal := 0
+		postTotal := 0
+		displayTotal := 0
 		for _, pid := range problemIDs {
-			score := entry.scores[pid]
-			scores = append(scores, score)
-			total += score
+			liveScore := entry.liveScores[pid]
+			postScore := entry.postScores[pid]
+			liveScores = append(liveScores, liveScore)
+			postScores = append(postScores, postScore)
+			liveTotal += liveScore
+			postTotal += postScore
+			switch boardMode {
+			case leaderboardModePost:
+				displayScores = append(displayScores, postScore)
+				displayTotal += postScore
+			case leaderboardModeCombined:
+				displayScores = append(displayScores, liveScore+postScore)
+				displayTotal += liveScore + postScore
+			default:
+				displayScores = append(displayScores, liveScore)
+				displayTotal += liveScore
+			}
 		}
 		entries = append(entries, model.ContestLeaderboardEntry{
 			UserID:   entry.userID,
 			Username: entry.username,
 			Group:    entry.group,
-			Total:    total,
-			Scores:   scores,
+			Total:    displayTotal,
+			Scores:   displayScores,
+			LiveTotal: liveTotal,
+			PostTotal: postTotal,
+			LiveScores: liveScores,
+			PostScores: postScores,
 		})
 	}
 
 	sort.Slice(entries, func(i, j int) bool {
+		if boardMode == leaderboardModeCombined {
+			if entries[i].LiveTotal == entries[j].LiveTotal {
+				if entries[i].PostTotal == entries[j].PostTotal {
+					return entries[i].UserID < entries[j].UserID
+				}
+				return entries[i].PostTotal > entries[j].PostTotal
+			}
+			return entries[i].LiveTotal > entries[j].LiveTotal
+		}
 		if entries[i].Total == entries[j].Total {
 			return entries[i].UserID < entries[j].UserID
 		}
 		return entries[i].Total > entries[j].Total
 	})
 
-	return contest, problemIDs, entries, nil
+	return contest, problemIDs, entries, boardMode, nil
 }
 
 // RefreshStats 刷新比赛相关的统计数据
@@ -312,7 +477,20 @@ func (s *ContestService) validateProblemIDs(ids []uint) error {
 	return nil
 }
 
-func validateContestRequest(title, contestType string, startAt, endAt time.Time) error {
+const (
+	contestTimingFixed = "fixed"
+	contestTimingWindow = "window"
+
+	leaderboardModeLive = "live"
+	leaderboardModePost = "post"
+	leaderboardModeCombined = "combined"
+
+	leaderboardPhaseLive = "live"
+	leaderboardPhasePost = "post"
+	leaderboardPhaseIgnore = "ignore"
+)
+
+func validateContestRequest(title, contestType string, startAt, endAt time.Time, timingMode string, durationMinutes int) error {
 	if strings.TrimSpace(title) == "" {
 		return errors.New("标题不能为空")
 	}
@@ -320,10 +498,34 @@ func validateContestRequest(title, contestType string, startAt, endAt time.Time)
 	if contestType != "oi" && contestType != "ioi" {
 		return errors.New("无效的赛制类型")
 	}
+	if timingMode != contestTimingFixed && timingMode != contestTimingWindow {
+		return errors.New("无效的计时模式")
+	}
+	if timingMode == contestTimingWindow && durationMinutes <= 0 {
+		return errors.New("窗口期模式下比赛时长必须大于 0 分钟")
+	}
 	if endAt.Before(startAt) || endAt.Equal(startAt) {
 		return errors.New("结束时间必须晚于开始时间")
 	}
 	return nil
+}
+
+func normalizeContestTimingMode(mode string) string {
+	mode = strings.ToLower(strings.TrimSpace(mode))
+	if mode == contestTimingWindow {
+		return contestTimingWindow
+	}
+	return contestTimingFixed
+}
+
+func normalizeLeaderboardMode(mode string) string {
+	mode = strings.ToLower(strings.TrimSpace(mode))
+	switch mode {
+	case leaderboardModeLive, leaderboardModePost, leaderboardModeCombined:
+		return mode
+	default:
+		return leaderboardModeCombined
+	}
 }
 
 func canAccessContest(contest *model.Contest, userID uint, group string) bool {
@@ -352,12 +554,44 @@ func buildContestListItems(contests []model.Contest) []model.ContestListItem {
 			ID:           contest.ID,
 			Title:        contest.Title,
 			Type:         contest.Type,
+			TimingMode:   normalizeContestTimingMode(contest.TimingMode),
+			DurationMinutes: contest.DurationMinutes,
 			StartAt:      contest.StartAt,
 			EndAt:        contest.EndAt,
 			ProblemCount: len(contest.ProblemIDs),
 		})
 	}
 	return items
+}
+
+func classifySubmissionPhase(contest *model.Contest, participation model.ContestParticipation, submittedAt time.Time) string {
+	if contest == nil {
+		return leaderboardPhaseIgnore
+	}
+	mode := normalizeContestTimingMode(contest.TimingMode)
+	if mode == contestTimingWindow {
+		if participation.ID == 0 {
+			if submittedAt.After(contest.EndAt) {
+				return leaderboardPhasePost
+			}
+			return leaderboardPhaseIgnore
+		}
+		if submittedAt.Before(participation.StartAt) {
+			return leaderboardPhaseIgnore
+		}
+		if !submittedAt.After(participation.EndAt) {
+			return leaderboardPhaseLive
+		}
+		return leaderboardPhasePost
+	}
+
+	if submittedAt.Before(contest.StartAt) {
+		return leaderboardPhaseIgnore
+	}
+	if !submittedAt.After(contest.EndAt) {
+		return leaderboardPhaseLive
+	}
+	return leaderboardPhasePost
 }
 
 func uniqueUintList(list []uint) []uint {
