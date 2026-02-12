@@ -653,6 +653,7 @@ type Claims struct {
 - 前端请求超时默认 `180s`，测试点上传接口单独使用 `600s` 超时并上报上传进度。
 - Nginx 代理建议设置：`client_max_body_size 200m`、`proxy_send_timeout 600s`、`proxy_read_timeout 600s`。
 - 后端 Gin：`MaxMultipartMemory = 256MB`。
+- 题面图片上传：单图大小上限 `10MB`，支持 `png/jpg/jpeg/gif/webp/bmp`。
 
 #### GET `/list` - 获取题目列表
 
@@ -702,6 +703,7 @@ type Claims struct {
 **说明**: 
 - 登录状态下会返回 `has_accepted` 标识用户是否已通过题目
 - 当题目为隐藏题时，仅管理员或参赛用户可访问；固定起止比赛要求已开赛，窗口期比赛要求个人会话已开始；赛后参赛用户仍可访问
+- 进行中的比赛里，非管理员访问隐藏题时不返回该题标签（`tags` 为空）
 
 **成功响应** (200):
 ```json
@@ -787,6 +789,46 @@ type Claims struct {
 #### DELETE `/:id` - 删除题目（管理员）
 
 **认证**: 需要 Bearer Token + 管理员权限
+
+---
+
+#### POST `/:id/image` - 上传题面图片（管理员）
+
+**认证**: 需要 Bearer Token + 管理员权限
+
+**请求类型**: `multipart/form-data`
+
+**表单字段**:
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `image` | file | 图片文件（`png/jpg/jpeg/gif/webp/bmp`） |
+
+**说明**:
+- 图片会保存到题目目录：`{problems_path}/{problem_id}/images/`。
+- 成功后返回可直接使用的 Markdown 片段。
+
+**成功响应** (200):
+```json
+{
+    "code": 200,
+    "message": "success",
+    "data": {
+        "url": "/api/v1/problem/1/image/1739769823_ab12cd34ef56.png",
+        "markdown": "![example](/api/v1/problem/1/image/1739769823_ab12cd34ef56.png)",
+        "filename": "1739769823_ab12cd34ef56.png"
+    }
+}
+```
+
+---
+
+#### GET `/:id/image/:filename` - 获取题面图片
+
+**认证**: 无需认证（按题目可见性访问）
+
+**说明**:
+- 图片通过后端读取题目目录并返回文件流。
+- 为避免路径穿越，文件名会做安全校验（禁止 `..` 与目录分隔符）。
 
 ---
 
@@ -1819,7 +1861,7 @@ IF AI 判定未通过:
 - 列表页（题目、提交、比赛、排行榜）统一表格样式与居中布局。
 - 题目详情页采用 splitpanes 分栏：左侧题面，右侧 Monaco 编辑器；支持 `fontSize` 和 `tabSize` 调整。
 - 提交详情与比赛详情使用指标仪表盘风格，突出状态、分数、时间与内存信息。
-- 管理后台 `ProblemEdit` 支持 Markdown 双栏编辑预览、单文件/Zip 上传进度、整题重测。
+- 管理后台 `ProblemEdit` 支持 Markdown 双栏编辑预览、题面图片上传并按目标字段插入、单文件/Zip 上传进度、整题重测。
 - 管理后台 `ContestEdit` 的比赛描述支持与题目管理一致的双栏 Markdown 编辑/预览。
 - 比赛详情页在窗口期模式下支持“开始比赛”会话状态展示；管理员排行榜支持 `赛时|赛后 / 赛时 / 赛后` 切换与对应导出。
 

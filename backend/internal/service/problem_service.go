@@ -2,6 +2,8 @@ package service
 
 import (
 	"archive/zip"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -99,9 +101,13 @@ func (s *ProblemService) GetByIDWithUser(id uint, userID uint, isAdmin bool) (*m
 	if err != nil {
 		return nil, errors.New("题目不存在")
 	}
-	if (problem.IsPublic == nil || !*problem.IsPublic) && !isAdmin {
+	isHidden := problem.IsPublic == nil || !*problem.IsPublic
+	if isHidden && !isAdmin {
 		if !s.canAccessHiddenProblem(problem.ID, userID) {
 			return nil, errors.New("无权限访问该题目")
+		}
+		if s.shouldHideHiddenProblemTags(problem.ID, userID, time.Now()) {
+			problem.Tags = model.StringList{}
 		}
 	}
 	if userID > 0 {
@@ -281,6 +287,37 @@ func (s *ProblemService) canAccessHiddenProblem(problemID uint, userID uint) boo
 	return false
 }
 
+func (s *ProblemService) shouldHideHiddenProblemTags(problemID uint, userID uint, now time.Time) bool {
+	if userID == 0 {
+		return false
+	}
+	user, err := s.userRepo.GetByID(userID)
+	if err != nil {
+		return false
+	}
+	if strings.ToLower(user.Role) == "admin" {
+		return false
+	}
+
+	contests, err := s.contestRepo.ListAll()
+	if err != nil {
+		return false
+	}
+	for _, contest := range contests {
+		if now.Before(contest.StartAt) || !now.Before(contest.EndAt) {
+			continue
+		}
+		if !containsUint([]uint(contest.ProblemIDs), problemID) {
+			continue
+		}
+		if !canAccessContest(&contest, userID, user.Group) {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
 // GetTestcases 获取测试用例
 func (s *ProblemService) GetTestcases(problemID uint) ([]model.Testcase, error) {
 	return s.repo.GetTestcases(problemID)
@@ -373,6 +410,69 @@ func (s *ProblemService) PrepareProblemRejudge(problemID uint) ([]model.Submissi
 	}
 
 	return submissions, nil
+}
+
+func (s *ProblemService) UploadProblemImage(problemID uint, originalName string, reader io.Reader) (string, string, string, error) {
+	if _, err := s.repo.GetByID(problemID); err != nil {
+		return "", "", "", errors.New("题目不存在")
+	}
+	ext := strings.ToLower(strings.TrimSpace(filepath.Ext(originalName)))
+	if !isAllowedProblemImageExt(ext) {
+		return "", "", "", errors.New("仅支持 png/jpg/jpeg/gif/webp/bmp 图片")
+	}
+
+	imageDir := filepath.Join(config.GlobalConfig.Paths.Problems, fmt.Sprintf("%d", problemID), "images")
+	if err := os.MkdirAll(imageDir, 0755); err != nil {
+		return "", "", "", errors.New("创建图片目录失败")
+	}
+
+	nameToken, err := randomHex(6)
+	if err != nil {
+		return "", "", "", errors.New("生成图片文件名失败")
+	}
+	savedName := fmt.Sprintf("%d_%s%s", time.Now().Unix(), nameToken, ext)
+	savePath := filepath.Join(imageDir, savedName)
+
+	output, err := os.Create(savePath)
+	if err != nil {
+		return "", "", "", errors.New("保存图片失败")
+	}
+	defer output.Close()
+
+	const maxImageSize = 10 << 20 // 10MB
+	written, err := io.Copy(output, io.LimitReader(reader, maxImageSize+1))
+	if err != nil {
+		_ = os.Remove(savePath)
+		return "", "", "", errors.New("写入图片失败")
+	}
+	if written > maxImageSize {
+		_ = os.Remove(savePath)
+		return "", "", "", errors.New("图片大小不能超过 10MB")
+	}
+
+	url := fmt.Sprintf("/api/v1/problem/%d/image/%s", problemID, savedName)
+	alt := strings.TrimSpace(strings.TrimSuffix(filepath.Base(originalName), ext))
+	if alt == "" {
+		alt = "image"
+	}
+	markdown := fmt.Sprintf("![%s](%s)", alt, url)
+	return url, markdown, savedName, nil
+}
+
+func (s *ProblemService) ResolveProblemImagePath(problemID uint, filename string) (string, error) {
+	if _, err := s.repo.GetByID(problemID); err != nil {
+		return "", errors.New("题目不存在")
+	}
+	name := strings.TrimSpace(filename)
+	if name == "" || name != filepath.Base(name) || strings.Contains(name, "..") {
+		return "", errors.New("图片文件名不合法")
+	}
+	path := filepath.Join(config.GlobalConfig.Paths.Problems, fmt.Sprintf("%d", problemID), "images", name)
+	info, err := os.Stat(path)
+	if err != nil || info.IsDir() {
+		return "", errors.New("图片不存在")
+	}
+	return path, nil
 }
 
 func normalizeFileIO(req *model.ProblemCreateRequest) (bool, string, string, error) {
@@ -559,4 +659,24 @@ func validateFileName(name string, suffix string) error {
 		return errors.New("文件名需以 " + suffix + " 结尾")
 	}
 	return nil
+}
+
+func isAllowedProblemImageExt(ext string) bool {
+	switch ext {
+	case ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp":
+		return true
+	default:
+		return false
+	}
+}
+
+func randomHex(n int) (string, error) {
+	if n <= 0 {
+		return "", errors.New("invalid random length")
+	}
+	buffer := make([]byte, n)
+	if _, err := rand.Read(buffer); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(buffer), nil
 }

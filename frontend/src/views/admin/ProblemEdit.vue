@@ -85,9 +85,48 @@
             <span class="sub-text">左侧编辑 Markdown，右侧实时预览</span>
           </div>
           
-          <el-card shadow="never" class="form-card content-card">
-            <el-form-item label="题目描述" prop="description">
-              <div class="md-row big">
+	          <el-card shadow="never" class="form-card content-card">
+	            <el-form-item label="题面图片（上传后可直接插入 Markdown）">
+	              <div v-if="isEdit" class="image-upload-panel">
+	                <el-select v-model="imageInsertTarget" class="image-target-select" size="small">
+	                  <el-option
+	                    v-for="item in imageInsertTargetOptions"
+	                    :key="item.value"
+	                    :label="`插入到：${item.label}`"
+	                    :value="item.value"
+	                  />
+	                </el-select>
+	                <el-upload
+	                  ref="imageUploadRef"
+	                  action=""
+	                  :auto-upload="false"
+	                  :on-change="handleImageFileChange"
+	                  :show-file-list="false"
+	                  accept=".png,.jpg,.jpeg,.gif,.webp,.bmp"
+	                >
+	                  <el-button :type="imageFile ? 'success' : 'default'">
+	                    {{ imageFile ? imageFile.name : '选择图片' }}
+	                  </el-button>
+	                </el-upload>
+	                <el-button type="primary" :loading="uploadingImage" :disabled="!imageFile" @click="uploadProblemImage">
+	                  上传并插入
+	                </el-button>
+	                <el-button text :disabled="!lastImageMarkdown" @click="copyImageMarkdown">复制 Markdown</el-button>
+	              </div>
+	              <div v-else class="image-upload-tip">请先创建题目，再上传题面图片。</div>
+	              <el-progress
+	                v-if="uploadingImage || imageProgress > 0"
+	                :percentage="imageProgress"
+	                :stroke-width="8"
+	                class="image-progress"
+	              />
+	              <div v-if="lastImageMarkdown" class="image-upload-tip">
+	                最新插入代码：<span class="mono">{{ lastImageMarkdown }}</span>
+	              </div>
+	            </el-form-item>
+
+	            <el-form-item label="题目描述" prop="description">
+	              <div class="md-row big">
                 <el-input
                   v-model="form.description"
                   type="textarea"
@@ -390,7 +429,6 @@ import { useRoute, useRouter } from 'vue-router'
 import { message } from '@/utils/message'
 import { problemApi } from '@/api/problem'
 import MarkdownPreview from '@/components/common/MarkdownPreview.vue'
-import { Document, Folder } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -440,6 +478,18 @@ const commonTags = [
 // 测试数据相关
 const testcases = ref([])
 const loadingTestcases = ref(false)
+const imageUploadRef = ref()
+const imageFile = ref(null)
+const uploadingImage = ref(false)
+const imageProgress = ref(0)
+const lastImageMarkdown = ref('')
+const imageInsertTarget = ref('description')
+const imageInsertTargetOptions = [
+	{ label: '题目描述', value: 'description' },
+	{ label: '输入格式', value: 'input_format' },
+	{ label: '输出格式', value: 'output_format' },
+	{ label: '提示', value: 'hint' },
+]
 const uploadingTestcase = ref(false)
 const inputFile = ref(null)
 const outputFile = ref(null)
@@ -472,12 +522,17 @@ function handleFileIOToggle(value) {
   } else {
     form.file_input_name = ''
     form.file_output_name = ''
-  }
+	}
+}
+
+function handleImageFileChange(file) {
+	imageFile.value = file.raw || null
+	imageUploadRef.value?.clearFiles()
 }
 
 function handleInputFileChange(file) {
-  inputFile.value = file.raw || null
-  inputUploadRef.value?.clearFiles()
+	inputFile.value = file.raw || null
+	inputUploadRef.value?.clearFiles()
 }
 
 function handleOutputFileChange(file) {
@@ -566,11 +621,73 @@ async function handleSubmit() {
     console.error(e)
   } finally {
     submitting.value = false
-  }
+	}
+}
+
+function getImageInsertTargetLabel() {
+	const target = imageInsertTargetOptions.find((item) => item.value === imageInsertTarget.value)
+	return target?.label || '题目描述'
+}
+
+function appendMarkdownToTarget(markdown) {
+	if (!markdown) return
+	const target = imageInsertTarget.value
+	const current = form[target] || ''
+	form[target] = current ? `${current}\n\n${markdown}` : markdown
+}
+
+async function copyImageMarkdown() {
+	if (!lastImageMarkdown.value) return
+	const text = lastImageMarkdown.value
+	if (navigator.clipboard?.writeText) {
+		try {
+			await navigator.clipboard.writeText(text)
+			message.success('Markdown 已复制')
+			return
+		} catch (_) {}
+	}
+	const textArea = document.createElement('textarea')
+	textArea.value = text
+	textArea.style.position = 'fixed'
+	textArea.style.left = '-9999px'
+	document.body.appendChild(textArea)
+	textArea.focus()
+	textArea.select()
+	document.execCommand('copy')
+	document.body.removeChild(textArea)
+	message.success('Markdown 已复制')
+}
+
+async function uploadProblemImage() {
+	if (!isEdit.value || !imageFile.value) return
+	const formData = new FormData()
+	formData.append('image', imageFile.value)
+
+	uploadingImage.value = true
+	imageProgress.value = 0
+	try {
+		const res = await problemApi.uploadImage(route.params.id, formData, {
+			timeout: 180000,
+			onUploadProgress: (event) => {
+				if (!event.total) return
+				imageProgress.value = Math.min(99, Math.round((event.loaded * 100) / event.total))
+			},
+		})
+		imageProgress.value = 100
+		lastImageMarkdown.value = res.data?.markdown || ''
+		appendMarkdownToTarget(lastImageMarkdown.value)
+		imageFile.value = null
+		imageUploadRef.value?.clearFiles()
+		message.success(`图片上传成功，已插入到${getImageInsertTargetLabel()}`)
+	} catch (e) {
+		console.error(e)
+	} finally {
+		uploadingImage.value = false
+	}
 }
 
 async function uploadTestcase() {
-  if (!inputFile.value || !outputFile.value) return
+	if (!inputFile.value || !outputFile.value) return
 
   const formData = new FormData()
   formData.append('input', inputFile.value)
@@ -874,12 +991,34 @@ onMounted(() => {
     align-items: center;
     gap: 12px;
     margin-bottom: 16px;
-  }
+	}
+}
+
+.image-upload-panel {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+}
+
+.image-target-select {
+	width: 170px;
+}
+
+.image-upload-tip {
+	margin-top: 8px;
+	font-size: 12px;
+	color: var(--swiss-text-secondary);
+}
+
+.image-progress {
+	margin-top: 10px;
+	max-width: 420px;
 }
 
 /* Upload */
 .upload-row {
-  display: flex;
+	display: flex;
   align-items: center;
   gap: 16px;
   padding: 20px 0;

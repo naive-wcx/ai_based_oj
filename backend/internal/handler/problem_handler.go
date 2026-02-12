@@ -220,6 +220,60 @@ func (h *ProblemHandler) UploadTestcaseZip(c *gin.Context) {
 	c.JSON(http.StatusOK, model.SuccessMessage("批量上传并处理成功", nil))
 }
 
+// UploadProblemImage 上传题面图片（管理员）
+// POST /api/v1/problem/:id/image
+func (h *ProblemHandler) UploadProblemImage(c *gin.Context) {
+	id := getUintParam(c, "id")
+	if id == 0 {
+		c.JSON(http.StatusBadRequest, model.BadRequest("题目 ID 无效"))
+		return
+	}
+
+	file, err := c.FormFile("image")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, model.BadRequest("请上传图片文件"))
+		return
+	}
+
+	reader, err := file.Open()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, model.BadRequest("无法读取图片文件"))
+		return
+	}
+	defer reader.Close()
+
+	url, markdown, savedName, err := h.service.UploadProblemImage(id, file.Filename, reader)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, model.BadRequest(err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, model.Success(gin.H{
+		"url":      url,
+		"markdown": markdown,
+		"filename": savedName,
+	}))
+}
+
+// GetProblemImage 获取题面图片
+// GET /api/v1/problem/:id/image/:filename
+func (h *ProblemHandler) GetProblemImage(c *gin.Context) {
+	id := getUintParam(c, "id")
+	if id == 0 {
+		c.JSON(http.StatusBadRequest, model.BadRequest("题目 ID 无效"))
+		return
+	}
+	filename := c.Param("filename")
+	path, err := h.service.ResolveProblemImagePath(id, filename)
+	if err != nil {
+		c.JSON(http.StatusNotFound, model.NotFound(err.Error()))
+		return
+	}
+
+	c.Header("Cache-Control", "public, max-age=86400")
+	c.File(path)
+}
+
 // GetTestcases 获取测试用例列表（管理员）
 // GET /api/v1/problem/:id/testcases
 func (h *ProblemHandler) GetTestcases(c *gin.Context) {

@@ -106,7 +106,8 @@ func (h *ContestHandler) GetByID(c *gin.Context) {
 		}
 	}
 
-	ordered := buildContestProblemList(contest.ProblemIDs, problems, acceptedSet, submittedSet, showAccepted)
+	hideHiddenTags := !isAdmin && !now.Before(contest.StartAt) && now.Before(contest.EndAt)
+	ordered := buildContestProblemList(contest.ProblemIDs, problems, acceptedSet, submittedSet, showAccepted, hideHiddenTags)
 
 	var myTotal *int
 	var myLiveTotal *int
@@ -366,7 +367,13 @@ func (h *ContestHandler) ExportLeaderboard(c *gin.Context) {
 	}
 }
 
-func buildContestProblemList(ids model.UintList, problems []model.Problem, acceptedSet, submittedSet map[uint]struct{}, showAccepted bool) []model.ProblemListItem {
+func buildContestProblemList(
+	ids model.UintList,
+	problems []model.Problem,
+	acceptedSet, submittedSet map[uint]struct{},
+	showAccepted bool,
+	hideHiddenTags bool,
+) []model.ProblemListItem {
 	result := make([]model.ProblemListItem, 0, len(ids))
 	problemMap := make(map[uint]model.Problem, len(problems))
 	for _, problem := range problems {
@@ -379,11 +386,15 @@ func buildContestProblemList(ids model.UintList, problems []model.Problem, accep
 		}
 		_, hasAccepted := acceptedSet[id]
 		_, hasSubmitted := submittedSet[id]
+		tags := []string(problem.Tags)
+		if hideHiddenTags && (problem.IsPublic == nil || !*problem.IsPublic) {
+			tags = []string{}
+		}
 		result = append(result, model.ProblemListItem{
 			ID:            problem.ID,
 			Title:         problem.Title,
 			Difficulty:    problem.Difficulty,
-			Tags:          problem.Tags,
+			Tags:          tags,
 			SubmitCount:   problem.SubmitCount,
 			AcceptedCount: problem.AcceptedCount,
 			HasAIJudge:    problem.AIJudgeConfig != nil && problem.AIJudgeConfig.Enabled,

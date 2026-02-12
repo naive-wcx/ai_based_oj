@@ -46,16 +46,18 @@ func SetupRouter(mode string) *gin.Engine {
 			user.PUT("/password", middleware.AuthMiddleware(), userHandler.ChangePassword)
 		}
 
-		// 题目模块
-		problem := v1.Group("/problem")
-		{
-			problem.GET("/list", middleware.OptionalAuthMiddleware(), problemHandler.List)
-			problem.GET("/:id", middleware.OptionalAuthMiddleware(), problemHandler.GetByID)
-			
-			// 管理员操作
-			problem.POST("", middleware.AuthMiddleware(), middleware.AdminMiddleware(), problemHandler.Create)
-			problem.PUT("/:id", middleware.AuthMiddleware(), middleware.AdminMiddleware(), problemHandler.Update)
-			problem.DELETE("/:id", middleware.AuthMiddleware(), middleware.AdminMiddleware(), problemHandler.Delete)
+			// 题目模块
+			problem := v1.Group("/problem")
+			{
+				problem.GET("/list", middleware.OptionalAuthMiddleware(), problemHandler.List)
+				problem.GET("/:id", middleware.OptionalAuthMiddleware(), problemHandler.GetByID)
+				problem.GET("/:id/image/:filename", problemHandler.GetProblemImage)
+
+				// 管理员操作
+				problem.POST("", middleware.AuthMiddleware(), middleware.AdminMiddleware(), problemHandler.Create)
+				problem.PUT("/:id", middleware.AuthMiddleware(), middleware.AdminMiddleware(), problemHandler.Update)
+				problem.DELETE("/:id", middleware.AuthMiddleware(), middleware.AdminMiddleware(), problemHandler.Delete)
+				problem.POST("/:id/image", middleware.AuthMiddleware(), middleware.AdminMiddleware(), problemHandler.UploadProblemImage)
 				problem.POST("/:id/testcase", middleware.AuthMiddleware(), middleware.AdminMiddleware(), problemHandler.UploadTestcase)
 				problem.POST("/:id/testcase/zip", middleware.AuthMiddleware(), middleware.AdminMiddleware(), problemHandler.UploadTestcaseZip)
 				problem.POST("/:id/rejudge", middleware.AuthMiddleware(), middleware.AdminMiddleware(), problemHandler.RejudgeProblem)
@@ -78,7 +80,7 @@ func SetupRouter(mode string) *gin.Engine {
 		// 统计
 		v1.GET("/statistics", statsHandler.GetPublic)
 
-		// 比赛模块
+			// 比赛模块
 			contest := v1.Group("/contest")
 			contest.Use(middleware.AuthMiddleware())
 			{

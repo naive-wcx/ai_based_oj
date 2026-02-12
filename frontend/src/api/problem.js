@@ -42,6 +42,14 @@ export const problemApi = {
     })
   },
 
+  // 上传题面图片（管理员）
+  uploadImage(id, formData, config = {}) {
+    return request.post(`/problem/${id}/image`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      ...config,
+    })
+  },
+
   // 整题重测（管理员）
   rejudge(id) {
     return request.post(`/problem/${id}/rejudge`)

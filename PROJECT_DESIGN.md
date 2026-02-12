@@ -227,18 +227,21 @@ oj-system/
 | POST | `/` | 创建题目 | 管理员 |
 | PUT | `/:id` | 更新题目 | 管理员 |
 | DELETE | `/:id` | 删除题目 | 管理员 |
+| POST | `/:id/image` | 上传题面图片 | 管理员 |
+| GET | `/:id/image/:filename` | 获取题面图片 | 公开（受题目可见性约束） |
 | POST | `/:id/testcase` | 上传测试数据 | 管理员 |
 | POST | `/:id/testcase/zip` | Zip 批量上传测试数据 | 管理员 |
 | POST | `/:id/rejudge` | 整题重测（历史提交重新入队） | 管理员 |
 | GET | `/:id/testcases` | 获取测试点列表 | 管理员 |
 | DELETE | `/:id/testcases` | 清空测试点 | 管理员 |
 
-**隐藏题可见性**：隐藏题仅对管理员或比赛开始后的参赛用户可见，赛后参赛用户仍可访问。
+**隐藏题可见性**：隐藏题仅对管理员或比赛开始后的参赛用户可见，赛后参赛用户仍可访问；进行中的比赛中，非管理员访问隐藏题时不展示题目标签。
 
 **上传链路参数（当前实现）**：
 - Nginx：`client_max_body_size 200m`，`proxy_send_timeout/proxy_read_timeout = 600s`
 - 后端 Gin：`MaxMultipartMemory = 256MB`
 - 前端：普通请求超时 `180s`，测试点上传超时 `600s` 并展示上传进度
+- 题面图片上传：单图大小上限 `10MB`，支持 `png/jpg/jpeg/gif/webp/bmp`
 
 **题目数据结构**
 ```json
@@ -796,7 +799,7 @@ components/
     ├── problem/ProblemDetail.vue   # 题面/代码分屏
     ├── submission/SubmissionDetail.vue # 评测仪表盘
     ├── contest/ContestDetail.vue   # 比赛详情、窗口期开赛与赛时/赛后榜切换
-    ├── admin/ProblemEdit.vue       # 双栏 Markdown 编辑 + 测试点管理（含上传进度、整题重测）
+    ├── admin/ProblemEdit.vue       # 双栏 Markdown 编辑 + 题面图片上传 + 测试点管理（含上传进度、整题重测）
     └── admin/ContestEdit.vue       # 比赛描述双栏 Markdown 编辑与预览
 ```
 
