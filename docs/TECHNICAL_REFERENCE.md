@@ -1320,6 +1320,7 @@ type Claims struct {
 - `live` 表示赛时得分
 - `post` 表示订正总分（包含赛时基线）
 - `combined` 视图显示 `live_total | post_total`
+- 窗口期比赛中，`entries` 会返回 `started_at` 与 `elapsed_seconds`；前端管理员视图在比赛结束前据此展示“剩余时间/未开始”，赛后不显示该列
 
 **成功响应** (200):
 ```json

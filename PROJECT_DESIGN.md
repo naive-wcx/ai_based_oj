@@ -393,6 +393,7 @@ POST /api/v1/submission
 - 窗口期比赛中，用户需调用 `POST /contest/:id/start` 启动个人计时
 - `my_live_total` / `my_post_total` 分别表示赛时与赛后得分（赛后为订正总分口径，包含赛时基线）
 - 管理员排行榜支持 `board_mode=combined|live|post` 三种视图
+- 窗口期比赛中，管理员排行榜在比赛结束前显示用户“剩余时间/未开始”，比赛结束后不显示该列
 
 ### 5.6 统计模块 `/api/v1/statistics`
 

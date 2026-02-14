@@ -149,10 +149,21 @@
             <el-table-column prop="user_id" label="ID" width="80" align="center" header-align="center" />
             <el-table-column prop="username" label="用户" width="160" align="center" header-align="center" />
             <el-table-column prop="group" label="分组" width="120" align="center" header-align="center" />
-	            <el-table-column prop="total" :label="leaderboardMode === 'combined' ? '赛时|赛后' : '总分'" width="130" align="center" header-align="center">
-	              <template #default="{ row }">
-	                <span class="score-cell" v-if="leaderboardMode === 'combined'">
-	                  {{ row.live_total }} | {{ row.post_total }}
+            <el-table-column
+              v-if="showAdminWindowRemaining"
+              label="剩余时间"
+              width="140"
+              align="center"
+              header-align="center"
+            >
+              <template #default="{ row }">
+                {{ getAdminWindowRemainingLabel(row) }}
+              </template>
+            </el-table-column>
+		            <el-table-column prop="total" :label="leaderboardMode === 'combined' ? '赛时|赛后' : '总分'" width="130" align="center" header-align="center">
+		              <template #default="{ row }">
+		                <span class="score-cell" v-if="leaderboardMode === 'combined'">
+		                  {{ row.live_total }} | {{ row.post_total }}
 	                </span>
 	                <span class="score-cell" v-else>{{ row.total }}</span>
 	              </template>
@@ -207,6 +218,7 @@ const leaderboardProblemIds = ref([])
 const leaderboardEntries = ref([])
 const leaderboardMode = ref('combined')
 const countdownTimer = ref(null)
+const clockNow = ref(Date.now())
 
 const canStartWindowContest = computed(() =>
   !userStore.isAdmin &&
@@ -217,6 +229,14 @@ const canStartWindowContest = computed(() =>
 const showUserRemaining = computed(() =>
   !userStore.isAdmin && !!sessionState.value?.in_live
 )
+
+const showAdminWindowRemaining = computed(() => {
+  if (!userStore.isAdmin || !contest.value) return false
+  if (contest.value.timing_mode !== 'window') return false
+  const endAt = new Date(contest.value.end_at)
+  if (Number.isNaN(endAt.getTime())) return false
+  return clockNow.value <= endAt.getTime()
+})
 
 function formatDate(value) {
   if (!value) return '-'
@@ -237,6 +257,18 @@ function formatRemaining(seconds) {
   const minutes = Math.floor((s % 3600) / 60)
   const remainSeconds = s % 60
   return `${hours}h ${minutes}m ${remainSeconds}s`
+}
+
+function getAdminWindowRemainingLabel(row) {
+  if (!row?.started_at) return '未开始'
+  const startedAt = new Date(row.started_at)
+  if (Number.isNaN(startedAt.getTime())) return '未开始'
+  const durationSeconds = Number(contest.value?.duration_minutes || 0) * 60
+  if (durationSeconds <= 0) return '-'
+  const elapsedSeconds = Math.max(0, Math.floor((clockNow.value - startedAt.getTime()) / 1000))
+  const remainingSeconds = durationSeconds - elapsedSeconds
+  if (remainingSeconds <= 0) return '已结束'
+  return formatRemaining(remainingSeconds)
 }
 
 function getContestStatusClass(contest) {
@@ -312,15 +344,20 @@ function clearCountdownTimer() {
 
 function setupCountdownTimer() {
   clearCountdownTimer()
-  if (!showUserRemaining.value || !sessionState.value) return
+  if (!showUserRemaining.value && !showAdminWindowRemaining.value) return
   countdownTimer.value = setInterval(() => {
-    const current = Number(sessionState.value?.remaining_seconds || 0)
-    if (current <= 0) {
-      sessionState.value = { ...sessionState.value, in_live: false, remaining_seconds: 0 }
-      clearCountdownTimer()
-      return
+    clockNow.value = Date.now()
+    if (showUserRemaining.value && sessionState.value) {
+      const current = Number(sessionState.value?.remaining_seconds || 0)
+      if (current <= 0) {
+        sessionState.value = { ...sessionState.value, in_live: false, remaining_seconds: 0 }
+      } else {
+        sessionState.value = { ...sessionState.value, remaining_seconds: current - 1 }
+      }
     }
-    sessionState.value = { ...sessionState.value, remaining_seconds: current - 1 }
+    if (!showUserRemaining.value && !showAdminWindowRemaining.value) {
+      clearCountdownTimer()
+    }
   }, 1000)
 }
 
