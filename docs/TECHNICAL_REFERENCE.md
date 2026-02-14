@@ -1308,6 +1308,14 @@ type Claims struct {
 
 **说明**: 赛后手动触发题目与用户统计同步。
 
+#### POST `/contests/:id/users/:user_id/reset-start` - 重置用户窗口期开赛状态（管理员）
+
+**认证**: 需要 Bearer Token + 管理员权限
+
+**说明**:
+- 仅适用于 `timing_mode=window` 的比赛。
+- 重置后会删除该用户的窗口期会话，用户状态恢复为“未开始”，可重新点击“开始比赛”创建新会话。
+
 #### GET `/contests/:id/leaderboard` - 比赛排行榜（管理员）
 
 **认证**: 需要 Bearer Token + 管理员权限

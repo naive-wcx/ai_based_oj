@@ -149,21 +149,41 @@
             <el-table-column prop="user_id" label="ID" width="80" align="center" header-align="center" />
             <el-table-column prop="username" label="用户" width="160" align="center" header-align="center" />
             <el-table-column prop="group" label="分组" width="120" align="center" header-align="center" />
-            <el-table-column
-              v-if="showAdminWindowRemaining"
-              label="剩余时间"
-              width="140"
-              align="center"
-              header-align="center"
-            >
-              <template #default="{ row }">
-                {{ getAdminWindowRemainingLabel(row) }}
-              </template>
-            </el-table-column>
-		            <el-table-column prop="total" :label="leaderboardMode === 'combined' ? '赛时|赛后' : '总分'" width="130" align="center" header-align="center">
-		              <template #default="{ row }">
-		                <span class="score-cell" v-if="leaderboardMode === 'combined'">
-		                  {{ row.live_total }} | {{ row.post_total }}
+	            <el-table-column
+	              v-if="showAdminWindowRemaining"
+	              label="剩余时间"
+	              width="140"
+	              align="center"
+	              header-align="center"
+	            >
+	              <template #default="{ row }">
+	                {{ getAdminWindowRemainingLabel(row) }}
+	              </template>
+	            </el-table-column>
+	            <el-table-column
+	              v-if="showAdminWindowRemaining"
+	              label="操作"
+	              width="120"
+	              align="center"
+	              header-align="center"
+	            >
+	              <template #default="{ row }">
+	                <el-button
+	                  type="warning"
+	                  text
+	                  size="small"
+	                  :loading="resettingUserId === row.user_id"
+	                  :disabled="!row.started_at"
+	                  @click="handleResetUserStart(row)"
+	                >
+	                  重置开始
+	                </el-button>
+	              </template>
+	            </el-table-column>
+			            <el-table-column prop="total" :label="leaderboardMode === 'combined' ? '赛时|赛后' : '总分'" width="130" align="center" header-align="center">
+			              <template #default="{ row }">
+			                <span class="score-cell" v-if="leaderboardMode === 'combined'">
+			                  {{ row.live_total }} | {{ row.post_total }}
 	                </span>
 	                <span class="score-cell" v-else>{{ row.total }}</span>
 	              </template>
@@ -196,6 +216,7 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import { useRoute } from 'vue-router'
+import { ElMessageBox } from 'element-plus'
 import { message } from '@/utils/message'
 import { contestApi } from '@/api/contest'
 import { adminApi } from '@/api/admin'
@@ -219,6 +240,7 @@ const leaderboardEntries = ref([])
 const leaderboardMode = ref('combined')
 const countdownTimer = ref(null)
 const clockNow = ref(Date.now())
+const resettingUserId = ref(null)
 
 const canStartWindowContest = computed(() =>
   !userStore.isAdmin &&
@@ -395,6 +417,39 @@ async function handleExport() {
     console.error(e)
   } finally {
     exporting.value = false
+  }
+}
+
+async function handleResetUserStart(row) {
+  const userID = Number(row?.user_id || 0)
+  if (!contest.value || !userID) return
+  const username = row?.username || `用户#${userID}`
+
+  try {
+    await ElMessageBox.confirm(
+      `确认重置 ${username} 的比赛开始状态吗？重置后该用户将恢复为“未开始”。`,
+      '提示',
+      {
+        confirmButtonText: '确认重置',
+        cancelButtonText: '取消',
+        type: 'warning',
+      }
+    )
+  } catch {
+    return
+  }
+
+  resettingUserId.value = userID
+  try {
+    const res = await adminApi.resetContestUserStart(route.params.id, userID)
+    message.success({ message: res.message || '重置成功', duration: 1000 })
+    await fetchLeaderboard()
+  } catch (e) {
+    console.error(e)
+  } finally {
+    if (resettingUserId.value === userID) {
+      resettingUserId.value = null
+    }
   }
 }
 

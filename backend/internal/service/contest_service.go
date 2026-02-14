@@ -195,6 +195,30 @@ func (s *ContestService) StartWindowContest(contestID uint, userID uint, isAdmin
 	return created, contest, nil
 }
 
+func (s *ContestService) ResetWindowContestStart(contestID uint, userID uint) (bool, error) {
+	contest, err := s.contestRepo.GetByID(contestID)
+	if err != nil {
+		return false, errors.New("比赛不存在")
+	}
+	if normalizeContestTimingMode(contest.TimingMode) != contestTimingWindow {
+		return false, errors.New("当前比赛不是窗口期模式")
+	}
+
+	user, err := s.userRepo.GetByID(userID)
+	if err != nil {
+		return false, errors.New("用户不存在")
+	}
+	if !canAccessContest(contest, userID, user.Group) {
+		return false, errors.New("该用户不在比赛参赛范围内")
+	}
+
+	deleted, err := s.participationRepo.DeleteByContestAndUser(contestID, userID)
+	if err != nil {
+		return false, errors.New("重置比赛会话失败")
+	}
+	return deleted, nil
+}
+
 func (s *ContestService) GetSessionState(contest *model.Contest, userID uint, now time.Time) (*model.ContestSessionState, error) {
 	state := &model.ContestSessionState{}
 	if contest == nil || userID == 0 {

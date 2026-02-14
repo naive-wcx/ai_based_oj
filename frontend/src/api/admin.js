@@ -51,6 +51,11 @@ export const adminApi = {
     return request.get(`/admin/contests/${id}/export`, { params, responseType: 'blob' })
   },
 
+  // 重置用户窗口期比赛开赛状态
+  resetContestUserStart(contestId, userId) {
+    return request.post(`/admin/contests/${contestId}/users/${userId}/reset-start`)
+  },
+
   // 获取 AI 设置
   getAISettings() {
     return request.get('/admin/settings/ai')

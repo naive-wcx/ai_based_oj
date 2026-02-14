@@ -47,3 +47,11 @@ func (r *ContestParticipationRepository) ListByContest(contestID uint) ([]model.
 	}
 	return participations, nil
 }
+
+func (r *ContestParticipationRepository) DeleteByContestAndUser(contestID, userID uint) (bool, error) {
+	result := r.db.Where("contest_id = ? AND user_id = ?", contestID, userID).Delete(&model.ContestParticipation{})
+	if result.Error != nil {
+		return false, result.Error
+	}
+	return result.RowsAffected > 0, nil
+}

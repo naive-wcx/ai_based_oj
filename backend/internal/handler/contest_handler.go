@@ -324,6 +324,34 @@ func (h *ContestHandler) RefreshStats(c *gin.Context) {
 	c.JSON(http.StatusOK, model.SuccessMessage("刷新统计数据成功", nil))
 }
 
+// ResetUserStart 重置用户窗口期开赛状态（管理员）
+// POST /api/v1/admin/contests/:id/users/:user_id/reset-start
+func (h *ContestHandler) ResetUserStart(c *gin.Context) {
+	contestID := getUintParam(c, "id")
+	userID := getUintParam(c, "user_id")
+	if contestID == 0 || userID == 0 {
+		c.JSON(http.StatusBadRequest, model.BadRequest("比赛 ID 或用户 ID 无效"))
+		return
+	}
+
+	deleted, err := h.service.ResetWindowContestStart(contestID, userID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, model.BadRequest(err.Error()))
+		return
+	}
+
+	msg := "用户尚未开始比赛，无需重置"
+	if deleted {
+		msg = "已重置用户比赛开始状态"
+	}
+
+	c.JSON(http.StatusOK, model.SuccessMessage(msg, gin.H{
+		"contest_id": contestID,
+		"user_id":    userID,
+		"reset":      deleted,
+	}))
+}
+
 // GetLeaderboard 获取比赛排行榜（管理员）
 // GET /api/v1/admin/contests/:id/leaderboard
 func (h *ContestHandler) GetLeaderboard(c *gin.Context) {

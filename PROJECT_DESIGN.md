@@ -394,6 +394,7 @@ POST /api/v1/submission
 - `my_live_total` / `my_post_total` 分别表示赛时与赛后得分（赛后为订正总分口径，包含赛时基线）
 - 管理员排行榜支持 `board_mode=combined|live|post` 三种视图
 - 窗口期比赛中，管理员排行榜在比赛结束前显示用户“剩余时间/未开始”，比赛结束后不显示该列
+- 窗口期比赛中，管理员可重置指定用户的开赛会话，用户状态恢复为“未开始”
 
 ### 5.6 统计模块 `/api/v1/statistics`
 
@@ -422,6 +423,7 @@ POST /api/v1/submission
 | POST | `/contests` | 创建比赛 | 管理员 |
 | PUT | `/contests/:id` | 更新比赛 | 管理员 |
 | DELETE | `/contests/:id` | 删除比赛 | 管理员 |
+| POST | `/contests/:id/users/:user_id/reset-start` | 重置用户窗口期开赛状态 | 管理员 |
 | GET | `/contests/:id/leaderboard` | 比赛排行榜（管理员，支持 `board_mode`） | 管理员 |
 | GET | `/contests/:id/export` | 导出比赛成绩（支持 `board_mode`） | 管理员 |
 | POST | `/contests/:id/refresh` | 刷新比赛统计（赛后同步） | 管理员 |

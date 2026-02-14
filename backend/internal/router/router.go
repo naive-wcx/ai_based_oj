@@ -105,6 +105,7 @@ func SetupRouter(mode string) *gin.Engine {
 					adminEditor.PUT("/contests/:id", contestHandler.Update)
 					adminEditor.DELETE("/contests/:id", contestHandler.Delete)
 					adminEditor.POST("/contests/:id/refresh", contestHandler.RefreshStats)
+					adminEditor.POST("/contests/:id/users/:user_id/reset-start", contestHandler.ResetUserStart)
 					adminEditor.GET("/contests/:id/leaderboard", contestHandler.GetLeaderboard)
 					adminEditor.GET("/contests/:id/export", contestHandler.ExportLeaderboard)
 
