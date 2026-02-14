@@ -97,17 +97,18 @@ func SetupRouter(mode string) *gin.Engine {
 				adminEditor := admin.Group("")
 				adminEditor.Use(middleware.AdminMiddleware())
 				{
-					adminEditor.GET("/users", userHandler.GetUserList) // 比赛编辑时用于选择参赛用户
-					adminEditor.POST("/users", userHandler.CreateUser)
-					adminEditor.POST("/users/batch", userHandler.CreateUsersBatch)
-					adminEditor.PUT("/users/:id", userHandler.UpdateUser)
-					adminEditor.POST("/contests", contestHandler.Create)
-					adminEditor.PUT("/contests/:id", contestHandler.Update)
-					adminEditor.DELETE("/contests/:id", contestHandler.Delete)
-					adminEditor.POST("/contests/:id/refresh", contestHandler.RefreshStats)
-					adminEditor.POST("/contests/:id/users/:user_id/reset-start", contestHandler.ResetUserStart)
-					adminEditor.GET("/contests/:id/leaderboard", contestHandler.GetLeaderboard)
-					adminEditor.GET("/contests/:id/export", contestHandler.ExportLeaderboard)
+						adminEditor.GET("/users", userHandler.GetUserList) // 比赛编辑时用于选择参赛用户
+						adminEditor.POST("/users", userHandler.CreateUser)
+						adminEditor.POST("/users/batch", userHandler.CreateUsersBatch)
+						adminEditor.PUT("/users/:id", userHandler.UpdateUser)
+						adminEditor.POST("/contests", contestHandler.Create)
+						adminEditor.PUT("/contests/:id", contestHandler.Update)
+						adminEditor.DELETE("/contests/:id", contestHandler.Delete)
+						adminEditor.POST("/contests/:id/refresh", contestHandler.RefreshStats)
+						adminEditor.POST("/contests/:id/users/:user_id/reset-start", contestHandler.ResetUserStart)
+						adminEditor.POST("/contests/:id/users/:user_id/force-finish", contestHandler.ForceFinishUserContest)
+						adminEditor.GET("/contests/:id/leaderboard", contestHandler.GetLeaderboard)
+						adminEditor.GET("/contests/:id/export", contestHandler.ExportLeaderboard)
 
 					// 系统设置
 					adminEditor.GET("/settings/ai", settingHandler.GetAISettings)

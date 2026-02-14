@@ -160,26 +160,41 @@
 	                {{ getAdminWindowRemainingLabel(row) }}
 	              </template>
 	            </el-table-column>
-	            <el-table-column
-	              v-if="showAdminWindowRemaining"
-	              label="操作"
-	              width="120"
-	              align="center"
-	              header-align="center"
-	            >
-	              <template #default="{ row }">
-	                <el-button
-	                  type="warning"
-	                  text
-	                  size="small"
-	                  :loading="resettingUserId === row.user_id"
-	                  :disabled="!row.started_at"
-	                  @click="handleResetUserStart(row)"
-	                >
-	                  重置开始
-	                </el-button>
-	              </template>
-	            </el-table-column>
+		            <el-table-column
+		              v-if="showAdminOperationColumn"
+		              label="操作"
+		              width="220"
+		              align="center"
+		              header-align="center"
+		            >
+		              <template #default="{ row }">
+		                <div class="admin-row-actions">
+		                  <el-button
+		                    v-if="contest?.timing_mode === 'window'"
+		                    type="warning"
+		                    text
+		                    size="small"
+		                    :loading="resettingUserId === row.user_id"
+		                    :disabled="!row.started_at"
+		                    @click="handleResetUserStart(row)"
+		                  >
+		                    重置开始
+		                  </el-button>
+		                  <span v-if="contest?.timing_mode === 'window'" class="action-separator">|</span>
+		                  <el-button
+		                    class="danger-action"
+		                    type="danger"
+		                    text
+		                    size="small"
+		                    :loading="forcingFinishUserId === row.user_id"
+		                    :disabled="contest?.timing_mode === 'window' && !row.started_at"
+		                    @click="handleForceFinish(row)"
+		                  >
+		                    终止比赛
+		                  </el-button>
+		                </div>
+		              </template>
+		            </el-table-column>
 			            <el-table-column prop="total" :label="leaderboardMode === 'combined' ? '赛时|赛后' : '总分'" width="130" align="center" header-align="center">
 			              <template #default="{ row }">
 			                <span class="score-cell" v-if="leaderboardMode === 'combined'">
@@ -241,6 +256,7 @@ const leaderboardMode = ref('combined')
 const countdownTimer = ref(null)
 const clockNow = ref(Date.now())
 const resettingUserId = ref(null)
+const forcingFinishUserId = ref(null)
 
 const canStartWindowContest = computed(() =>
   !userStore.isAdmin &&
@@ -255,6 +271,13 @@ const showUserRemaining = computed(() =>
 const showAdminWindowRemaining = computed(() => {
   if (!userStore.isAdmin || !contest.value) return false
   if (contest.value.timing_mode !== 'window') return false
+  const endAt = new Date(contest.value.end_at)
+  if (Number.isNaN(endAt.getTime())) return false
+  return clockNow.value <= endAt.getTime()
+})
+
+const showAdminOperationColumn = computed(() => {
+  if (!userStore.isAdmin || !contest.value) return false
   const endAt = new Date(contest.value.end_at)
   if (Number.isNaN(endAt.getTime())) return false
   return clockNow.value <= endAt.getTime()
@@ -366,7 +389,7 @@ function clearCountdownTimer() {
 
 function setupCountdownTimer() {
   clearCountdownTimer()
-  if (!showUserRemaining.value && !showAdminWindowRemaining.value) return
+  if (!showUserRemaining.value && !showAdminWindowRemaining.value && !showAdminOperationColumn.value) return
   countdownTimer.value = setInterval(() => {
     clockNow.value = Date.now()
     if (showUserRemaining.value && sessionState.value) {
@@ -377,7 +400,7 @@ function setupCountdownTimer() {
         sessionState.value = { ...sessionState.value, remaining_seconds: current - 1 }
       }
     }
-    if (!showUserRemaining.value && !showAdminWindowRemaining.value) {
+    if (!showUserRemaining.value && !showAdminWindowRemaining.value && !showAdminOperationColumn.value) {
       clearCountdownTimer()
     }
   }, 1000)
@@ -449,6 +472,39 @@ async function handleResetUserStart(row) {
   } finally {
     if (resettingUserId.value === userID) {
       resettingUserId.value = null
+    }
+  }
+}
+
+async function handleForceFinish(row) {
+  const userID = Number(row?.user_id || 0)
+  if (!contest.value || !userID) return
+  const username = row?.username || `用户#${userID}`
+
+  try {
+    await ElMessageBox.confirm(
+      `确认终止 ${username} 的比赛吗？终止后该用户将被强制交卷，后续提交按赛后口径处理。`,
+      '提示',
+      {
+        confirmButtonText: '确认终止',
+        cancelButtonText: '取消',
+        type: 'warning',
+      }
+    )
+  } catch {
+    return
+  }
+
+  forcingFinishUserId.value = userID
+  try {
+    const res = await adminApi.forceFinishContestUser(route.params.id, userID)
+    message.success({ message: res.message || '终止成功', duration: 1000 })
+    await fetchLeaderboard()
+  } catch (e) {
+    console.error(e)
+  } finally {
+    if (forcingFinishUserId.value === userID) {
+      forcingFinishUserId.value = null
     }
   }
 }
@@ -628,6 +684,23 @@ onBeforeUnmount(() => {
   justify-content: center;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.admin-row-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+
+.action-separator {
+  color: var(--swiss-text-secondary);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.danger-action {
+  color: var(--swiss-danger) !important;
 }
 
 .section-title {

@@ -13,6 +13,7 @@
         <router-link to="/submissions" class="nav-link">提交</router-link>
         <router-link to="/contests" class="nav-link">比赛</router-link>
         <router-link to="/rank" class="nav-link">排行榜</router-link>
+        <router-link to="/help" class="nav-link">帮助</router-link>
       </nav>
 
       <div class="navbar-actions">

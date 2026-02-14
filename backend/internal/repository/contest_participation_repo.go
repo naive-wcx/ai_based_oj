@@ -2,6 +2,7 @@ package repository
 
 import (
 	"errors"
+	"time"
 
 	"gorm.io/gorm"
 	"oj-system/internal/model"
@@ -54,4 +55,41 @@ func (r *ContestParticipationRepository) DeleteByContestAndUser(contestID, userI
 		return false, result.Error
 	}
 	return result.RowsAffected > 0, nil
+}
+
+func (r *ContestParticipationRepository) Save(participation *model.ContestParticipation) error {
+	return r.db.Save(participation).Error
+}
+
+func (r *ContestParticipationRepository) SetSessionEndAt(contestID, userID uint, startAt, endAt time.Time) (bool, *model.ContestParticipation, error) {
+	existing, err := r.GetByContestAndUser(contestID, userID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			created := &model.ContestParticipation{
+				ContestID: contestID,
+				UserID:    userID,
+				StartAt:   startAt,
+				EndAt:     endAt,
+			}
+			if err := r.Create(created); err != nil {
+				return false, nil, err
+			}
+			return true, created, nil
+		}
+		return false, nil, err
+	}
+
+	// 已经结束到更早/相同时间时，视为无需更新（幂等）
+	if !existing.EndAt.After(endAt) {
+		return false, existing, nil
+	}
+
+	if existing.StartAt.IsZero() || existing.StartAt.After(startAt) {
+		existing.StartAt = startAt
+	}
+	existing.EndAt = endAt
+	if err := r.Save(existing); err != nil {
+		return false, nil, err
+	}
+	return true, existing, nil
 }

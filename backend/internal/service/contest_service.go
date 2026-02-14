@@ -219,6 +219,51 @@ func (s *ContestService) ResetWindowContestStart(contestID uint, userID uint) (b
 	return deleted, nil
 }
 
+func (s *ContestService) ForceFinishContest(contestID uint, userID uint) (bool, time.Time, error) {
+	contest, err := s.contestRepo.GetByID(contestID)
+	if err != nil {
+		return false, time.Time{}, errors.New("比赛不存在")
+	}
+
+	user, err := s.userRepo.GetByID(userID)
+	if err != nil {
+		return false, time.Time{}, errors.New("用户不存在")
+	}
+	if !canAccessContest(contest, userID, user.Group) {
+		return false, time.Time{}, errors.New("该用户不在比赛参赛范围内")
+	}
+
+	now := time.Now()
+	if now.Before(contest.StartAt) {
+		return false, time.Time{}, errors.New("比赛尚未开始")
+	}
+	if !now.Before(contest.EndAt) {
+		return false, time.Time{}, errors.New("比赛已结束，无需终止")
+	}
+
+	mode := normalizeContestTimingMode(contest.TimingMode)
+	if mode == contestTimingWindow {
+		participation, err := s.participationRepo.GetByContestAndUser(contestID, userID)
+		if err != nil {
+			return false, time.Time{}, errors.New("用户尚未开始比赛")
+		}
+		if !participation.EndAt.After(now) {
+			return false, participation.EndAt, nil
+		}
+		participation.EndAt = now
+		if err := s.participationRepo.Save(participation); err != nil {
+			return false, time.Time{}, errors.New("终止比赛失败")
+		}
+		return true, participation.EndAt, nil
+	}
+
+	updated, participation, err := s.participationRepo.SetSessionEndAt(contestID, userID, contest.StartAt, now)
+	if err != nil {
+		return false, time.Time{}, errors.New("终止比赛失败")
+	}
+	return updated, participation.EndAt, nil
+}
+
 func (s *ContestService) GetSessionState(contest *model.Contest, userID uint, now time.Time) (*model.ContestSessionState, error) {
 	state := &model.ContestSessionState{}
 	if contest == nil || userID == 0 {
@@ -229,6 +274,14 @@ func (s *ContestService) GetSessionState(contest *model.Contest, userID uint, no
 	if mode != contestTimingWindow {
 		start := contest.StartAt
 		end := contest.EndAt
+		if participation, err := s.participationRepo.GetByContestAndUser(contest.ID, userID); err == nil && participation != nil {
+			if participation.StartAt.After(start) {
+				start = participation.StartAt
+			}
+			if participation.EndAt.Before(end) {
+				end = participation.EndAt
+			}
+		}
 		state.Started = !now.Before(start)
 		state.InLive = state.Started && now.Before(end)
 		state.CanStart = false
@@ -329,15 +382,13 @@ func (s *ContestService) GetLeaderboard(contestID uint, boardMode string) (*mode
 
 	participationMap := map[uint]model.ContestParticipation{}
 	participationUserIDs := make([]uint, 0)
-	if isWindowMode {
-		participations, err := s.participationRepo.ListByContest(contestID)
-		if err != nil {
-			return nil, nil, nil, "", errors.New("获取比赛会话失败")
-		}
-		for _, participation := range participations {
-			participationMap[participation.UserID] = participation
-			participationUserIDs = append(participationUserIDs, participation.UserID)
-		}
+	participations, err := s.participationRepo.ListByContest(contestID)
+	if err != nil {
+		return nil, nil, nil, "", errors.New("获取比赛会话失败")
+	}
+	for _, participation := range participations {
+		participationMap[participation.UserID] = participation
+		participationUserIDs = append(participationUserIDs, participation.UserID)
 	}
 
 	type userEntry struct {
@@ -666,10 +717,21 @@ func classifySubmissionPhase(contest *model.Contest, participation model.Contest
 		return leaderboardPhasePost
 	}
 
-	if submittedAt.Before(contest.StartAt) {
+	liveStart := contest.StartAt
+	liveEnd := contest.EndAt
+	if participation.ID != 0 {
+		if participation.StartAt.After(liveStart) {
+			liveStart = participation.StartAt
+		}
+		if participation.EndAt.Before(liveEnd) {
+			liveEnd = participation.EndAt
+		}
+	}
+
+	if submittedAt.Before(liveStart) {
 		return leaderboardPhaseIgnore
 	}
-	if !submittedAt.After(contest.EndAt) {
+	if !submittedAt.After(liveEnd) {
 		return leaderboardPhaseLive
 	}
 	return leaderboardPhasePost

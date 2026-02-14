@@ -352,6 +352,35 @@ func (h *ContestHandler) ResetUserStart(c *gin.Context) {
 	}))
 }
 
+// ForceFinishUserContest 终止用户比赛（强制交卷，管理员）
+// POST /api/v1/admin/contests/:id/users/:user_id/force-finish
+func (h *ContestHandler) ForceFinishUserContest(c *gin.Context) {
+	contestID := getUintParam(c, "id")
+	userID := getUintParam(c, "user_id")
+	if contestID == 0 || userID == 0 {
+		c.JSON(http.StatusBadRequest, model.BadRequest("比赛 ID 或用户 ID 无效"))
+		return
+	}
+
+	updated, finishedAt, err := h.service.ForceFinishContest(contestID, userID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, model.BadRequest(err.Error()))
+		return
+	}
+
+	msg := "该用户比赛已处于结束状态"
+	if updated {
+		msg = "已强制终止用户比赛"
+	}
+
+	c.JSON(http.StatusOK, model.SuccessMessage(msg, gin.H{
+		"contest_id":  contestID,
+		"user_id":     userID,
+		"finished_at": finishedAt,
+		"updated":     updated,
+	}))
+}
+
 // GetLeaderboard 获取比赛排行榜（管理员）
 // GET /api/v1/admin/contests/:id/leaderboard
 func (h *ContestHandler) GetLeaderboard(c *gin.Context) {

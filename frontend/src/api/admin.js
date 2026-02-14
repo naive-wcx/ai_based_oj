@@ -56,6 +56,11 @@ export const adminApi = {
     return request.post(`/admin/contests/${contestId}/users/${userId}/reset-start`)
   },
 
+  // 强制终止用户比赛（强制交卷）
+  forceFinishContestUser(contestId, userId) {
+    return request.post(`/admin/contests/${contestId}/users/${userId}/force-finish`)
+  },
+
   // 获取 AI 设置
   getAISettings() {
     return request.get('/admin/settings/ai')

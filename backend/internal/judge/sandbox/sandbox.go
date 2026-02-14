@@ -7,6 +7,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -147,7 +149,7 @@ func (s *SimpleSandbox) run(workDir string, cmd []string, input string, timeLimi
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeLimit+1000)*time.Millisecond)
 	defer cancel()
 
-	execCmd := exec.CommandContext(ctx, cmd[0], cmd[1:]...)
+	execCmd := buildRunCommand(ctx, cmd, memoryLimit)
 	execCmd.Dir = workDir
 
 	// 设置输入
@@ -195,6 +197,31 @@ func (s *SimpleSandbox) run(workDir string, cmd []string, input string, timeLimi
 
 	result.Status = "OK"
 	return result, nil
+}
+
+// buildRunCommand 构建运行命令。
+// Linux 下将进程栈上限设置为 memoryLimit（MB）对应的 KB，使栈空间与题目空间限制同量级。
+func buildRunCommand(ctx context.Context, cmd []string, memoryLimit int) *exec.Cmd {
+	if len(cmd) == 0 {
+		return exec.CommandContext(ctx, "")
+	}
+	if runtime.GOOS != "linux" || memoryLimit <= 0 {
+		return exec.CommandContext(ctx, cmd[0], cmd[1:]...)
+	}
+	if _, err := exec.LookPath("bash"); err != nil {
+		return exec.CommandContext(ctx, cmd[0], cmd[1:]...)
+	}
+
+	stackKB := memoryLimit * 1024
+	args := []string{
+		"-c",
+		"ulimit -s \"$1\" && shift && exec \"$@\"",
+		"sandbox",
+		strconv.Itoa(stackKB),
+	}
+	args = append(args, cmd...)
+
+	return exec.CommandContext(ctx, "bash", args...)
 }
 
 // CompareOutput 比较输出

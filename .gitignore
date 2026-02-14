@@ -35,6 +35,10 @@ temp/
 .DS_Store
 Thumbs.db
 
+# Agent 协作文件
+AGENTS.md
+agents.md
+
 # 部署包
 deploy/package/
 upload.sh

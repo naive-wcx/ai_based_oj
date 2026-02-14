@@ -1316,6 +1316,15 @@ type Claims struct {
 - 仅适用于 `timing_mode=window` 的比赛。
 - 重置后会删除该用户的窗口期会话，用户状态恢复为“未开始”，可重新点击“开始比赛”创建新会话。
 
+#### POST `/contests/:id/users/:user_id/force-finish` - 终止用户比赛（强制交卷，管理员）
+
+**认证**: 需要 Bearer Token + 管理员权限
+
+**说明**:
+- `timing_mode=window`：将该用户会话 `end_at` 立即截断为当前时间。
+- `timing_mode=fixed`：为该用户写入个人结束时间（不改变比赛全局结束时间），该用户后续提交按赛后口径计分。
+- 该操作为幂等操作：若用户已处于结束状态，会返回“已结束/无需更新”语义结果。
+
 #### GET `/contests/:id/leaderboard` - 比赛排行榜（管理员）
 
 **认证**: 需要 Bearer Token + 管理员权限
@@ -1686,6 +1695,13 @@ type ExecuteResult struct {
 | `GetWorkDir(submissionID uint) string` | 获取工作目录 |
 | `CleanWorkDir(workDir string)` | 清理工作目录 |
 
+#### 资源限制说明（当前 `simple sandbox` 实现）
+
+- 时间限制：按题目 `time_limit`（ms）检查，超时返回 `TLE`。
+- 内存限制：当前实现未做真实进程内存统计与硬限制，`ExecuteResult.Memory` 固定为 `0`。
+- 栈空间限制：Linux 下运行前使用 `ulimit -s` 设置为 `memory_limit * 1024`（KB），栈上限与题目空间限制同量级。
+- 编译超时：编译阶段使用固定 30 秒超时（`context.WithTimeout(..., 30*time.Second)`）。
+
 ### 5.4 判题主逻辑 (`judge/judger.go`)
 
 | 函数 | 说明 |
@@ -1844,6 +1860,7 @@ IF AI 判定未通过:
 | `/contests` | ContestList | 需登录 |
 | `/contest/:id` | ContestDetail | 需登录 |
 | `/rank` | Rank | 公开 |
+| `/help` | Help | 公开 |
 | `/login` | Login | 公开 |
 | `/profile` | Profile | 需登录 |
 | `/admin/*` | AdminLayout | 需管理员 |
@@ -1863,6 +1880,7 @@ IF AI 判定未通过:
 | `AIJudgeResult` | `components/submission/AIJudgeResult.vue` | AI 判题结果展示 |
 | `TestcaseResults` | `components/submission/TestcaseResults.vue` | 测试点结果展示 |
 | `MarkdownPreview` | `components/common/MarkdownPreview.vue` | Markdown 预览（支持 LaTeX） |
+| `Help` | `views/Help.vue` | 评测环境帮助页（系统/命令/资源限制） |
 | `Settings` | `views/admin/Settings.vue` | 系统设置页面 |
 
 ### 7.5 当前 UI 设计要点
@@ -1875,6 +1893,7 @@ IF AI 判定未通过:
 - 管理后台 `ProblemEdit` 支持 Markdown 双栏编辑预览、题面图片上传并按目标字段插入、单文件/Zip 上传进度、整题重测。
 - 管理后台 `ContestEdit` 的比赛描述支持与题目管理一致的双栏 Markdown 编辑/预览。
 - 比赛详情页在窗口期模式下支持“开始比赛”会话状态展示；管理员排行榜支持 `赛时|赛后 / 赛时 / 赛后` 切换与对应导出。
+- 比赛详情管理员操作支持：窗口期显示 `重置开始 | 终止比赛`，固定起止显示 `终止比赛`；其中“终止比赛”为红色文本按钮。
 
 ---
 

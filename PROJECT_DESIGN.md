@@ -292,6 +292,7 @@ oj-system/
 **说明**：
 - 管理员可查看所有提交；普通用户仅可查看自己的提交。
 - 进行中的 OI 比赛中，普通用户看到的相关提交会被遮罩为 `Submitted`，分数与详细评测信息隐藏。
+- 当前 `simple sandbox` 中，`memory_used` 字段暂不做真实统计（固定为 0）；Linux 运行前会将栈上限设置为 `memory_limit * 1024`（KB），使栈空间与题目空间限制同量级。
 
 **提交请求**
 ```json
@@ -395,6 +396,7 @@ POST /api/v1/submission
 - 管理员排行榜支持 `board_mode=combined|live|post` 三种视图
 - 窗口期比赛中，管理员排行榜在比赛结束前显示用户“剩余时间/未开始”，比赛结束后不显示该列
 - 窗口期比赛中，管理员可重置指定用户的开赛会话，用户状态恢复为“未开始”
+- 管理员可终止指定用户比赛（强制交卷）：窗口期会立即截断该用户会话结束时间；固定起止会写入该用户个人结束时间，后续提交按赛后口径处理
 
 ### 5.6 统计模块 `/api/v1/statistics`
 
@@ -424,6 +426,7 @@ POST /api/v1/submission
 | PUT | `/contests/:id` | 更新比赛 | 管理员 |
 | DELETE | `/contests/:id` | 删除比赛 | 管理员 |
 | POST | `/contests/:id/users/:user_id/reset-start` | 重置用户窗口期开赛状态 | 管理员 |
+| POST | `/contests/:id/users/:user_id/force-finish` | 终止用户比赛（强制交卷） | 管理员 |
 | GET | `/contests/:id/leaderboard` | 比赛排行榜（管理员，支持 `board_mode`） | 管理员 |
 | GET | `/contests/:id/export` | 导出比赛成绩（支持 `board_mode`） | 管理员 |
 | POST | `/contests/:id/refresh` | 刷新比赛统计（赛后同步） | 管理员 |
@@ -775,6 +778,7 @@ CREATE TABLE contest_participations (
 | 提交列表 | `/submissions` | 提交记录（需登录） |
 | 提交详情 | `/submission/:id` | 提交结果、AI 分析详情（需登录） |
 | 排行榜 | `/rank` | 用户排名 |
+| 评测帮助 | `/help` | 公示评测系统环境、编译命令、版本与资源限制规则 |
 | 个人中心 | `/profile` | 个人信息、提交统计 |
 | 登录 | `/login` | 用户登录 |
 | 管理后台 | `/admin/*` | 题目管理、用户管理 |
@@ -800,6 +804,7 @@ components/
     ├── problem/ProblemDetail.vue   # 题面/代码分屏
     ├── submission/SubmissionDetail.vue # 评测仪表盘
     ├── contest/ContestDetail.vue   # 比赛详情、窗口期开赛与赛时/赛后榜切换
+    ├── Help.vue                    # 评测环境帮助页（系统/命令/资源限制）
     ├── admin/ProblemEdit.vue       # 双栏 Markdown 编辑 + 题面图片上传 + 测试点管理（含上传进度、整题重测）
     └── admin/ContestEdit.vue       # 比赛描述双栏 Markdown 编辑与预览
 ```
