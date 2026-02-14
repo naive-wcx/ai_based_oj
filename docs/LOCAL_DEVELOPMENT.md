@@ -308,6 +308,16 @@ int main() {
 3. 普通用户进入比赛详情后点击 **开始比赛**，在弹出的二次确认框中确认后开始个人计时
 4. 管理员在比赛详情可切换排行榜模式：`赛时|赛后`、`赛时`、`赛后`
 
+### 5.8 考试场景压力测试（可选）
+
+如需模拟约 50 人 IOI 考试并记录提交反馈时间与服务器压力：
+
+1. 参考 `stress-testing/WORKFLOW.md` 执行完整流程。
+2. 使用 `stress-testing/prepare_exam.py` 批量建号（含组别）并创建比赛。
+3. 使用 `stress-testing/run_exam_load.py` 执行“前期稀疏、末期加速”的提交模拟。
+4. 在服务器侧使用 `stress-testing/collect_server_metrics.py` 同步采集压力指标。
+5. 使用 `stress-testing/analyze_results.py` 生成统计报告并对比不同 `judge.workers` 配置。
+
 ---
 
 ## 六、快速启动脚本

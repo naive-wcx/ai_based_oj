@@ -88,6 +88,14 @@ OJ/
 │       ├── stores/                  # Pinia 状态
 │       └── router/                  # Vue Router
 │
+├── stress-testing/                  # 压力测试脚本与流程文档
+│   ├── WORKFLOW.md                  # 考试场景压测流程
+│   ├── prepare_exam.py              # 批量建号/建赛
+│   ├── run_exam_load.py             # 压测主脚本（提交延迟采集）
+│   ├── collect_server_metrics.py    # 服务器压力采集
+│   ├── analyze_results.py           # 压测结果分析
+│   └── requirements.txt             # 脚本依赖
+│
 └── deploy/                          # 部署配置
 ```
 
@@ -2082,6 +2090,17 @@ SELECT * FROM users;              # 查看用户
 SELECT * FROM problems;           # 查看题目
 SELECT * FROM submissions WHERE status='Pending';  # 查看待判题
 ```
+
+### 8.5 考试场景压力测试
+
+仓库已提供可复现实验脚本，见 `stress-testing/`：
+
+1. `prepare_exam.py`：批量创建压测账号（含组别字段）并创建比赛。
+2. `run_exam_load.py`：按“常规期 → 临近期 → 冲刺期”提交节奏模拟考试。
+3. `collect_server_metrics.py`：按秒采集 CPU/内存/Load/PID 指标。
+4. `analyze_results.py`：生成延迟与压力统计报告。
+
+完整步骤请参考 `stress-testing/WORKFLOW.md`。
 
 ---
 

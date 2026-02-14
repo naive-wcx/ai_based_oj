@@ -22,6 +22,7 @@
 - **窗口期开赛确认**：窗口期比赛点击“开始比赛”后需二次确认，确认后才进入个人计时
 - **IOI 提交计数展示**：比赛详情页显示“已提交次数/提交上限（99）”
 - **评测中断与删除**：管理员可在提交列表终止指定评测，或删除指定提交记录
+- **考试压测工具链**：提供 `stress-testing/` 工作流与脚本，支持批量建号建赛、提交延迟与服务器压力采集
 
 ### 1.3 部署环境
 - **开发环境**：Windows 主机 / WSL
@@ -184,6 +185,14 @@ oj-system/
 │   ├── nginx/
 │   ├── systemd/
 │   └── scripts/
+│
+├── stress-testing/          # 压力测试工具与工作流
+│   ├── WORKFLOW.md          # 考试场景压测步骤
+│   ├── prepare_exam.py      # 批量建号/按组建赛
+│   ├── run_exam_load.py     # 提交压测主脚本
+│   ├── collect_server_metrics.py # 服务器指标采集
+│   ├── analyze_results.py   # 压测结果分析
+│   └── requirements.txt
 │
 ├── data/                    # 数据目录（运行时）
 │   ├── problems/            # 题目数据（测试点）
