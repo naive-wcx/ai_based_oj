@@ -42,7 +42,8 @@
               <div class="user-cell">
                 <span class="user-avatar">{{ row.username[0]?.toUpperCase() }}</span>
                 <span class="username">{{ row.username }}</span>
-                <span v-if="row.role === 'admin'" class="badge admin">ADMIN</span>
+                <span v-if="row.role === 'super_admin'" class="badge admin">SUPER ADMIN</span>
+                <span v-else-if="row.role === 'admin'" class="badge admin">ADMIN</span>
               </div>
             </template>
           </el-table-column>

@@ -149,7 +149,7 @@ go run ./cmd/server
 ```
 配置加载成功
 数据库初始化成功
-已创建默认管理员账号: admin / admin123
+已创建默认超级管理员账号: admin / admin123
 [Judger] 判题服务已启动
 [Queue] 启动判题队列，workers=2
 [Worker-0] 启动
@@ -486,7 +486,7 @@ cd /mnt/d/课程资料/25秋季/OJ/frontend
 npm run dev
 
 # 浏览器访问: http://localhost:3000
-# 管理员账号: admin / admin123
+# 超级管理员账号: admin / admin123
 # AI API Key 可在管理后台 → 系统设置中配置
 ```
 

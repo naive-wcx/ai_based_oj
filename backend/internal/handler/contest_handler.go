@@ -109,7 +109,6 @@ func (h *ContestHandler) GetByID(c *gin.Context) {
 	hideHiddenTags := !isAdmin && !now.Before(contest.StartAt) && now.Before(contest.EndAt)
 	ordered := buildContestProblemList(contest.ProblemIDs, problems, acceptedSet, submittedSet, showAccepted, hideHiddenTags)
 
-	var myTotal *int
 	var myLiveTotal *int
 	var myPostTotal *int
 	if userID > 0 && hasStarted {
@@ -124,42 +123,39 @@ func (h *ContestHandler) GetByID(c *gin.Context) {
 				liveEnd = *sessionState.EndAt
 			}
 
-			if liveEnd.After(now) {
-				liveEnd = now
-			}
-			liveMap, err := h.submissionRepo.GetUserLastScoresInRange(userID, []uint(contest.ProblemIDs), liveStart, liveEnd)
-			if err == nil {
-				liveTotal := 0
-				for _, pid := range contest.ProblemIDs {
-					liveTotal += liveMap[pid]
+				if liveEnd.After(now) {
+					liveEnd = now
 				}
-				myLiveTotal = &liveTotal
-			}
-
-			postStart := liveEnd.Add(time.Millisecond)
-			if !postStart.After(now) {
-				postMap, err := h.submissionRepo.GetUserLastScoresInRange(userID, []uint(contest.ProblemIDs), postStart, now)
+				liveMap, err := h.submissionRepo.GetUserLastScoresInRange(userID, []uint(contest.ProblemIDs), liveStart, liveEnd)
 				if err == nil {
-					postTotal := 0
+					liveTotal := 0
 					for _, pid := range contest.ProblemIDs {
-						postTotal += postMap[pid]
+						liveTotal += liveMap[pid]
 					}
-					myPostTotal = &postTotal
-				}
-			}
+					myLiveTotal = &liveTotal
 
-			if myLiveTotal != nil || myPostTotal != nil {
-				total := 0
-				if myLiveTotal != nil {
-					total += *myLiveTotal
+					// 赛后分数口径：订正总分（包含赛时基线）。
+					correctedPostTotal := liveTotal
+					postStart := liveEnd.Add(time.Millisecond)
+					if !postStart.After(now) {
+						postMap, err := h.submissionRepo.GetUserLastScoresInRange(userID, []uint(contest.ProblemIDs), postStart, now)
+						if err == nil {
+							postTotal := 0
+							for _, pid := range contest.ProblemIDs {
+								score := liveMap[pid]
+								if postScore, ok := postMap[pid]; ok {
+									score = postScore
+								}
+								postTotal += score
+							}
+							correctedPostTotal = postTotal
+						}
+					}
+					myPostTotal = &correctedPostTotal
 				}
-				if myPostTotal != nil {
-					total += *myPostTotal
-				}
-				myTotal = &total
+
 			}
 		}
-	}
 
 	c.JSON(http.StatusOK, model.Success(gin.H{
 		"contest":  contest,
@@ -167,7 +163,6 @@ func (h *ContestHandler) GetByID(c *gin.Context) {
 		"session":  sessionState,
 		"my_live_total": myLiveTotal,
 		"my_post_total": myPostTotal,
-		"my_total": myTotal,
 	}))
 }
 
@@ -197,6 +192,58 @@ func (h *ContestHandler) StartContest(c *gin.Context) {
 		"user_id": userID,
 		"start_at": participation.StartAt,
 		"end_at": participation.EndAt,
+	}))
+}
+
+// GetUserLeaderboard 获取比赛实时排行榜（普通用户可见，窗口期需已开始个人会话）
+// GET /api/v1/contest/:id/leaderboard
+func (h *ContestHandler) GetUserLeaderboard(c *gin.Context) {
+	contestID := getUintParam(c, "id")
+	if contestID == 0 {
+		c.JSON(http.StatusBadRequest, model.BadRequest("比赛 ID 无效"))
+		return
+	}
+
+	userID := middleware.GetUserID(c)
+	isAdmin := middleware.IsAdmin(c)
+	contest, err := h.service.GetByIDForUser(contestID, userID, isAdmin)
+	if err != nil {
+		if err.Error() == "比赛不存在" || err.Error() == "用户不存在" {
+			c.JSON(http.StatusNotFound, model.NotFound(err.Error()))
+		} else {
+			c.JSON(http.StatusForbidden, model.Forbidden(err.Error()))
+		}
+		return
+	}
+
+	if strings.ToLower(contest.TimingMode) == "window" && !isAdmin {
+		state, _ := h.service.GetSessionState(contest, userID, time.Now())
+		if state == nil || !state.Started {
+			c.JSON(http.StatusForbidden, model.Forbidden("请先开始比赛后查看排行榜"))
+			return
+		}
+	}
+
+	contest, problemIDs, entries, boardMode, err := h.service.GetLeaderboard(contestID, "live")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, model.BadRequest(err.Error()))
+		return
+	}
+	if strings.ToLower(contest.TimingMode) == "window" {
+		filtered := make([]model.ContestLeaderboardEntry, 0, len(entries))
+		for _, entry := range entries {
+			if entry.StartedAt != nil {
+				filtered = append(filtered, entry)
+			}
+		}
+		entries = filtered
+	}
+
+	c.JSON(http.StatusOK, model.Success(gin.H{
+		"contest":     contest,
+		"problem_ids": problemIDs,
+		"entries":     entries,
+		"board_mode":  boardMode,
 	}))
 }
 
@@ -326,9 +373,9 @@ func (h *ContestHandler) ExportLeaderboard(c *gin.Context) {
 
 	header := []string{"user_id", "username", "group"}
 	if boardMode == "combined" {
-		header = append(header, "live_total", "post_total", "combined_total")
+		header = append(header, "live_total", "post_total")
 		for _, pid := range problemIDs {
-			header = append(header, fmt.Sprintf("P%d_live", pid), fmt.Sprintf("P%d_post", pid), fmt.Sprintf("P%d_combined", pid))
+			header = append(header, fmt.Sprintf("P%d_live", pid), fmt.Sprintf("P%d_post", pid))
 		}
 	} else {
 		header = append(header, "total")
@@ -345,7 +392,7 @@ func (h *ContestHandler) ExportLeaderboard(c *gin.Context) {
 			entry.Group,
 		}
 		if boardMode == "combined" {
-			row = append(row, strconv.Itoa(entry.LiveTotal), strconv.Itoa(entry.PostTotal), strconv.Itoa(entry.LiveTotal+entry.PostTotal))
+			row = append(row, strconv.Itoa(entry.LiveTotal), strconv.Itoa(entry.PostTotal))
 			for i := range problemIDs {
 				liveScore := 0
 				postScore := 0
@@ -355,7 +402,7 @@ func (h *ContestHandler) ExportLeaderboard(c *gin.Context) {
 				if i < len(entry.PostScores) {
 					postScore = entry.PostScores[i]
 				}
-				row = append(row, strconv.Itoa(liveScore), strconv.Itoa(postScore), strconv.Itoa(liveScore+postScore))
+				row = append(row, strconv.Itoa(liveScore), strconv.Itoa(postScore))
 			}
 		} else {
 			row = append(row, strconv.Itoa(entry.Total))
@@ -387,13 +434,15 @@ func buildContestProblemList(
 		_, hasAccepted := acceptedSet[id]
 		_, hasSubmitted := submittedSet[id]
 		tags := []string(problem.Tags)
+		difficulty := problem.Difficulty
 		if hideHiddenTags && (problem.IsPublic == nil || !*problem.IsPublic) {
 			tags = []string{}
+			difficulty = ""
 		}
 		result = append(result, model.ProblemListItem{
 			ID:            problem.ID,
 			Title:         problem.Title,
-			Difficulty:    problem.Difficulty,
+			Difficulty:    difficulty,
 			Tags:          tags,
 			SubmitCount:   problem.SubmitCount,
 			AcceptedCount: problem.AcceptedCount,

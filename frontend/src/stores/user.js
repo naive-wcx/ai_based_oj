@@ -7,7 +7,8 @@ export const useUserStore = defineStore('user', () => {
   const user = ref(JSON.parse(localStorage.getItem('user') || 'null'))
 
   const isLoggedIn = computed(() => !!token.value)
-  const isAdmin = computed(() => user.value?.role === 'admin')
+  const isAdmin = computed(() => ['admin', 'super_admin'].includes(user.value?.role))
+  const isSuperAdmin = computed(() => user.value?.role === 'super_admin')
   const username = computed(() => user.value?.username || '')
 
   function setToken(newToken) {
@@ -49,6 +50,7 @@ export const useUserStore = defineStore('user', () => {
     user,
     isLoggedIn,
     isAdmin,
+    isSuperAdmin,
     username,
     login,
     fetchProfile,

@@ -4,6 +4,12 @@ import (
 	"time"
 )
 
+const (
+	RoleUser       = "user"
+	RoleAdmin      = "admin"
+	RoleSuperAdmin = "super_admin"
+)
+
 // User 用户模型
 type User struct {
 	ID           uint      `json:"id" gorm:"primaryKey"`
@@ -11,7 +17,7 @@ type User struct {
 	Email        string    `json:"email" gorm:"size:100"`
 	PasswordHash string    `json:"-" gorm:"size:255;not null"`
 	StudentID    string    `json:"student_id" gorm:"size:50"`
-	Role         string    `json:"role" gorm:"size:20;default:user"` // user, admin
+	Role         string    `json:"role" gorm:"size:20;default:user"` // user, admin, super_admin
 	Group        string    `json:"group" gorm:"size:50"`
 	SolvedCount  int       `json:"solved_count" gorm:"default:0"`   // AC 的题目数量
 	AcceptedCount int      `json:"accepted_count" gorm:"default:0"` // AC 的提交总数

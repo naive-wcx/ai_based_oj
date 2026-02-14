@@ -301,27 +301,50 @@ func (s *ContestService) GetLeaderboard(contestID uint, boardMode string) (*mode
 		return nil, nil, nil, "", errors.New("获取提交记录失败")
 	}
 	now := time.Now()
+	isWindowMode := normalizeContestTimingMode(contest.TimingMode) == contestTimingWindow
 
 	participationMap := map[uint]model.ContestParticipation{}
-	if normalizeContestTimingMode(contest.TimingMode) == contestTimingWindow {
+	participationUserIDs := make([]uint, 0)
+	if isWindowMode {
 		participations, err := s.participationRepo.ListByContest(contestID)
 		if err != nil {
 			return nil, nil, nil, "", errors.New("获取比赛会话失败")
 		}
 		for _, participation := range participations {
 			participationMap[participation.UserID] = participation
+			participationUserIDs = append(participationUserIDs, participation.UserID)
 		}
 	}
 
 	type userEntry struct {
-		userID   uint
-		username string
-		group    string
-		liveScores map[uint]int
-		postScores map[uint]int
+		userID         uint
+		username       string
+		group          string
+		liveScores     map[uint]int
+		postScores     map[uint]int
+		participation  *model.ContestParticipation
 	}
 
 	userMap := make(map[uint]*userEntry)
+	if len(participationUserIDs) > 0 {
+		users, err := s.userRepo.GetByIDs(uniqueUintList(participationUserIDs))
+		if err != nil {
+			return nil, nil, nil, "", errors.New("获取参赛用户失败")
+		}
+		for _, user := range users {
+			participation := participationMap[user.ID]
+			participationCopy := participation
+			userMap[user.ID] = &userEntry{
+				userID:    user.ID,
+				username:  user.Username,
+				group:     user.Group,
+				liveScores: make(map[uint]int),
+				postScores: make(map[uint]int),
+				participation: &participationCopy,
+			}
+		}
+	}
+
 	for _, sub := range submissions {
 		if sub.CreatedAt.After(now) {
 			continue
@@ -332,14 +355,27 @@ func (s *ContestService) GetLeaderboard(contestID uint, boardMode string) (*mode
 
 		entry, ok := userMap[sub.UserID]
 		if !ok {
+			var participation *model.ContestParticipation
+			if p, exists := participationMap[sub.UserID]; exists {
+				pCopy := p
+				participation = &pCopy
+			}
 			entry = &userEntry{
 				userID:   sub.UserID,
 				username: sub.Username,
 				group:    sub.Group,
 				liveScores: make(map[uint]int),
 				postScores: make(map[uint]int),
+				participation: participation,
 			}
 			userMap[sub.UserID] = entry
+		} else {
+			if entry.username == "" {
+				entry.username = sub.Username
+			}
+			if entry.group == "" {
+				entry.group = sub.Group
+			}
 		}
 
 		phase := classifySubmissionPhase(contest, participationMap[sub.UserID], sub.CreatedAt)
@@ -360,33 +396,54 @@ func (s *ContestService) GetLeaderboard(contestID uint, boardMode string) (*mode
 		displayTotal := 0
 		for _, pid := range problemIDs {
 			liveScore := entry.liveScores[pid]
-			postScore := entry.postScores[pid]
+			postScore, hasPost := entry.postScores[pid]
+			correctedPostScore := liveScore
+			if hasPost {
+				correctedPostScore = postScore
+			}
 			liveScores = append(liveScores, liveScore)
-			postScores = append(postScores, postScore)
+			postScores = append(postScores, correctedPostScore)
 			liveTotal += liveScore
-			postTotal += postScore
+			postTotal += correctedPostScore
 			switch boardMode {
 			case leaderboardModePost:
-				displayScores = append(displayScores, postScore)
-				displayTotal += postScore
+				displayScores = append(displayScores, correctedPostScore)
+				displayTotal += correctedPostScore
 			case leaderboardModeCombined:
-				displayScores = append(displayScores, liveScore+postScore)
-				displayTotal += liveScore + postScore
+				displayScores = append(displayScores, correctedPostScore)
+				displayTotal += correctedPostScore
 			default:
 				displayScores = append(displayScores, liveScore)
 				displayTotal += liveScore
 			}
 		}
+
+		var startedAt *time.Time
+		elapsedSeconds := int64(0)
+		if entry.participation != nil && isWindowMode {
+			start := entry.participation.StartAt
+			startedAt = &start
+			elapsedEnd := now
+			if elapsedEnd.After(entry.participation.EndAt) {
+				elapsedEnd = entry.participation.EndAt
+			}
+			if elapsedEnd.After(entry.participation.StartAt) {
+				elapsedSeconds = int64(elapsedEnd.Sub(entry.participation.StartAt).Seconds())
+			}
+		}
+
 		entries = append(entries, model.ContestLeaderboardEntry{
-			UserID:   entry.userID,
-			Username: entry.username,
-			Group:    entry.group,
-			Total:    displayTotal,
-			Scores:   displayScores,
-			LiveTotal: liveTotal,
-			PostTotal: postTotal,
-			LiveScores: liveScores,
-			PostScores: postScores,
+			UserID:         entry.userID,
+			Username:       entry.username,
+			Group:          entry.group,
+			Total:          displayTotal,
+			Scores:         displayScores,
+			LiveTotal:      liveTotal,
+			PostTotal:      postTotal,
+			LiveScores:     liveScores,
+			PostScores:     postScores,
+			StartedAt:      startedAt,
+			ElapsedSeconds: elapsedSeconds,
 		})
 	}
 

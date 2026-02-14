@@ -78,9 +78,20 @@ func createDirectories(cfg *config.Config) {
 // createDefaultAdmin 创建默认管理员账号
 func createDefaultAdmin() {
 	userRepo := repository.NewUserRepository()
-	
-	// 检查是否已存在 admin 用户
+
+	// 已存在 admin 用户时，确保其为超级管理员
 	if userRepo.ExistsByUsername("admin") {
+		admin, err := userRepo.GetByUsername("admin")
+		if err != nil {
+			log.Printf("读取默认管理员失败: %v", err)
+			return
+		}
+		if admin.Role != model.RoleSuperAdmin {
+			admin.Role = model.RoleSuperAdmin
+			if err := userRepo.Update(admin); err != nil {
+				log.Printf("升级默认管理员为超级管理员失败: %v", err)
+			}
+		}
 		return
 	}
 
@@ -95,7 +106,7 @@ func createDefaultAdmin() {
 		Username:     "admin",
 		Email:        "admin@oj.local",
 		PasswordHash: hashedPassword,
-		Role:         "admin",
+		Role:         model.RoleSuperAdmin,
 	}
 
 	if err := userRepo.Create(admin); err != nil {

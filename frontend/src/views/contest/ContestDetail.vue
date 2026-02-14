@@ -51,16 +51,16 @@
 	        </div>
 	        <div class="stat-divider"></div>
 	        <div class="stat-card">
-	          <div class="stat-label">我的总分</div>
-	          <div class="stat-value score-value" :class="myTotal != null ? 'highlight' : ''">
-	            {{ myTotal != null ? myTotal : '-' }}
-	          </div>
-	        </div>
-	        <div class="stat-divider"></div>
-	        <div class="stat-card">
 	          <div class="stat-label">我的赛时|赛后</div>
 	          <div class="stat-value time-value">
 	            {{ myLiveTotal != null || myPostTotal != null ? `${myLiveTotal ?? 0} | ${myPostTotal ?? 0}` : '-' }}
+	          </div>
+	        </div>
+	        <div class="stat-divider" v-if="showUserRemaining"></div>
+	        <div class="stat-card" v-if="showUserRemaining">
+	          <div class="stat-label">剩余时间</div>
+	          <div class="stat-value time-value">
+	            {{ formatRemaining(sessionState?.remaining_seconds || 0) }}
 	          </div>
 	        </div>
 	      </div>
@@ -87,7 +87,7 @@
 	      </div>
 
       <!-- 3. 比赛描述 -->
-      <div class="section-block" v-if="contest.description">
+      <div class="section-block description-section" v-if="contest.description">
         <h3 class="section-title">比赛说明</h3>
         <div class="description-box">
           <MarkdownPreview :content="contest.description" />
@@ -120,17 +120,18 @@
               </template>
             </el-table-column>
             
-            <!-- 难度：居中 -->
-            <el-table-column label="难度" width="120" align="center" header-align="center">
-              <template #default="{ row }">
-                <DifficultyBadge :difficulty="row.difficulty" />
-              </template>
-            </el-table-column>
+	            <!-- 难度：居中 -->
+	            <el-table-column label="难度" width="120" align="center" header-align="center">
+	              <template #default="{ row }">
+	                <DifficultyBadge v-if="row.difficulty" :difficulty="row.difficulty" />
+	                <span v-else>-</span>
+	              </template>
+	            </el-table-column>
           </el-table>
         </div>
       </div>
 
-      <!-- 5. 管理员排行榜 (仅管理员可见) -->
+	      <!-- 5. 管理员排行榜 (仅管理员可见) -->
 	      <div class="section-block" v-if="userStore.isAdmin">
 	        <div class="section-header">
 	          <h3 class="section-title">排行榜 (管理员)</h3>
@@ -182,7 +183,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { message } from '@/utils/message'
 import { contestApi } from '@/api/contest'
@@ -195,7 +196,6 @@ const route = useRoute()
 const loading = ref(false)
 const contest = ref(null)
 const problems = ref([])
-const myTotal = ref(null)
 const myLiveTotal = ref(null)
 const myPostTotal = ref(null)
 const sessionState = ref(null)
@@ -206,11 +206,16 @@ const startingContest = ref(false)
 const leaderboardProblemIds = ref([])
 const leaderboardEntries = ref([])
 const leaderboardMode = ref('combined')
+const countdownTimer = ref(null)
 
 const canStartWindowContest = computed(() =>
   !userStore.isAdmin &&
   contest.value?.timing_mode === 'window' &&
   !!sessionState.value?.can_start
+)
+
+const showUserRemaining = computed(() =>
+  !userStore.isAdmin && !!sessionState.value?.in_live
 )
 
 function formatDate(value) {
@@ -269,10 +274,12 @@ async function fetchContest() {
     sessionState.value = res.data.session || null
     myLiveTotal.value = res.data.my_live_total ?? null
     myPostTotal.value = res.data.my_post_total ?? null
-    myTotal.value = res.data.my_total ?? null
+    leaderboardEntries.value = []
+    leaderboardProblemIds.value = []
     if (userStore.isAdmin) {
-      fetchLeaderboard()
+      await fetchLeaderboard()
     }
+    setupCountdownTimer()
   } catch (e) {
     console.error(e)
   } finally {
@@ -294,6 +301,27 @@ async function fetchLeaderboard() {
   } finally {
     leaderboardLoading.value = false
   }
+}
+
+function clearCountdownTimer() {
+  if (countdownTimer.value) {
+    clearInterval(countdownTimer.value)
+    countdownTimer.value = null
+  }
+}
+
+function setupCountdownTimer() {
+  clearCountdownTimer()
+  if (!showUserRemaining.value || !sessionState.value) return
+  countdownTimer.value = setInterval(() => {
+    const current = Number(sessionState.value?.remaining_seconds || 0)
+    if (current <= 0) {
+      sessionState.value = { ...sessionState.value, in_live: false, remaining_seconds: 0 }
+      clearCountdownTimer()
+      return
+    }
+    sessionState.value = { ...sessionState.value, remaining_seconds: current - 1 }
+  }, 1000)
 }
 
 async function handleStartContest() {
@@ -336,6 +364,10 @@ async function handleExport() {
 onMounted(() => {
   fetchContest()
 })
+
+onBeforeUnmount(() => {
+  clearCountdownTimer()
+})
 </script>
 
 <style lang="scss" scoped>
@@ -345,27 +377,39 @@ onMounted(() => {
   min-height: 100vh;
 }
 
+.container {
+  text-align: center;
+}
+
 /* Header */
 .detail-header {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
   margin-bottom: 30px;
   padding-bottom: 20px;
   border-bottom: 1px solid var(--swiss-border-light);
 }
 
+.header-left {
+  text-align: center;
+}
+
 .header-right {
   display: flex;
   align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
   gap: 12px;
 }
 
 .back-link {
   font-size: 14px;
   color: var(--swiss-text-secondary);
-  margin-bottom: 8px;
-  display: block;
+  margin-bottom: 12px;
+  display: inline-block;
   font-weight: 500;
   transition: color 0.2s;
   &:hover { color: var(--swiss-primary); }
@@ -393,6 +437,7 @@ onMounted(() => {
 .stats-dashboard {
   display: flex;
   align-items: stretch;
+  justify-content: center;
   background: #fff;
   border: 1px solid var(--swiss-border-light);
   border-radius: var(--radius-sm);
@@ -416,6 +461,8 @@ onMounted(() => {
   padding: 12px 14px;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  text-align: center;
   gap: 4px;
 }
 
@@ -435,6 +482,8 @@ onMounted(() => {
   min-width: 120px;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  text-align: center;
   justify-content: space-between;
 }
 
@@ -474,23 +523,27 @@ onMounted(() => {
 
 .section-header {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
   align-items: center;
+  justify-content: center;
+  gap: 12px;
   margin-bottom: 16px;
 }
 
 .leaderboard-actions {
   display: flex;
   align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
   gap: 10px;
 }
 
 .section-title {
   font-size: 18px;
-  margin: 0;
-  margin-bottom: 16px;
+  margin: 0 0 16px;
   color: var(--swiss-text-main);
   font-weight: 600;
+  text-align: center;
 }
 
 .description-box {
@@ -501,6 +554,15 @@ onMounted(() => {
   font-size: 15px;
   color: var(--swiss-text-main);
   line-height: 1.6;
+  text-align: left;
+}
+
+.description-section {
+  text-align: left;
+}
+
+.description-box :deep(*) {
+  text-align: left;
 }
 
 .announcement-block {

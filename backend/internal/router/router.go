@@ -89,28 +89,39 @@ func SetupRouter(mode string) *gin.Engine {
 				contest.POST("/:id/start", contestHandler.StartContest)
 			}
 
-		// 管理员模块
-		admin := v1.Group("/admin")
-		admin.Use(middleware.AuthMiddleware(), middleware.AdminMiddleware())
-		{
-			admin.GET("/users", userHandler.GetUserList)
-			admin.POST("/users", userHandler.CreateUser)
-			admin.POST("/users/batch", userHandler.CreateUsersBatch)
-			admin.PUT("/users/:id", userHandler.UpdateUser)
-			admin.PUT("/users/:id/role", userHandler.SetUserRole)
-			admin.POST("/contests", contestHandler.Create)
-			admin.PUT("/contests/:id", contestHandler.Update)
-			admin.DELETE("/contests/:id", contestHandler.Delete)
-			admin.POST("/contests/:id/refresh", contestHandler.RefreshStats)
-			admin.GET("/contests/:id/leaderboard", contestHandler.GetLeaderboard)
-			admin.GET("/contests/:id/export", contestHandler.ExportLeaderboard)
-			
-			// 系统设置
-			admin.GET("/settings/ai", settingHandler.GetAISettings)
-			admin.PUT("/settings/ai", settingHandler.UpdateAISettings)
-			admin.POST("/settings/ai/test", settingHandler.TestAIConnection)
+			// 管理模块
+			admin := v1.Group("/admin")
+			admin.Use(middleware.AuthMiddleware())
+			{
+				// 普通管理员与超级管理员都可访问（题目管理接口在 /problem 下）
+				adminEditor := admin.Group("")
+				adminEditor.Use(middleware.AdminMiddleware())
+				{
+					adminEditor.GET("/users", userHandler.GetUserList) // 比赛编辑时用于选择参赛用户
+					adminEditor.POST("/users", userHandler.CreateUser)
+					adminEditor.POST("/users/batch", userHandler.CreateUsersBatch)
+					adminEditor.PUT("/users/:id", userHandler.UpdateUser)
+					adminEditor.POST("/contests", contestHandler.Create)
+					adminEditor.PUT("/contests/:id", contestHandler.Update)
+					adminEditor.DELETE("/contests/:id", contestHandler.Delete)
+					adminEditor.POST("/contests/:id/refresh", contestHandler.RefreshStats)
+					adminEditor.GET("/contests/:id/leaderboard", contestHandler.GetLeaderboard)
+					adminEditor.GET("/contests/:id/export", contestHandler.ExportLeaderboard)
+
+					// 系统设置
+					adminEditor.GET("/settings/ai", settingHandler.GetAISettings)
+					adminEditor.PUT("/settings/ai", settingHandler.UpdateAISettings)
+					adminEditor.POST("/settings/ai/test", settingHandler.TestAIConnection)
+				}
+
+				// 仅超级管理员可访问：管理员权限变更
+				superAdmin := admin.Group("")
+				superAdmin.Use(middleware.SuperAdminMiddleware())
+				{
+					superAdmin.PUT("/users/:id/role", userHandler.SetUserRole)
+				}
+			}
 		}
-	}
 
 	return r
 }

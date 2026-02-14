@@ -8,7 +8,8 @@
           <el-avatar :size="80">{{ userStore.username[0]?.toUpperCase() }}</el-avatar>
           <div class="profile-info">
             <h2>{{ userStore.user?.username }}</h2>
-            <el-tag v-if="userStore.isAdmin" type="danger">管理员</el-tag>
+            <el-tag v-if="userStore.isSuperAdmin" type="warning">超级管理员</el-tag>
+            <el-tag v-else-if="userStore.isAdmin" type="danger">管理员</el-tag>
           </div>
         </div>
         

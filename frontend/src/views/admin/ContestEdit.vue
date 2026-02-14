@@ -35,7 +35,7 @@
 	          <el-form-item label="计时模式" prop="timing_mode" class="form-item">
 	            <el-select v-model="form.timing_mode" placeholder="请选择计时模式">
 	              <el-option label="固定起止时间（传统）" value="fixed" />
-	              <el-option label="窗口期 + 个人固定时长（USACO 风格）" value="window" />
+		              <el-option label="窗口期 + 个人固定时长" value="window" />
 	            </el-select>
 	          </el-form-item>
 	          <el-form-item label="开始时间" prop="start_at" class="form-item">

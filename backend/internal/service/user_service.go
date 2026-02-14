@@ -43,12 +43,15 @@ func (s *UserService) CreateUserByAdmin(req *model.AdminCreateUserRequest) (*mod
 		return nil, errors.New("密码加密失败")
 	}
 
-	role := req.Role
+	role := normalizeRole(req.Role)
 	if role == "" {
-		role = "user"
+		role = model.RoleUser
 	}
-	if role != "user" && role != "admin" {
+	if role != model.RoleUser && role != model.RoleAdmin && role != model.RoleSuperAdmin {
 		return nil, errors.New("无效的角色")
+	}
+	if role != model.RoleUser {
+		return nil, errors.New("不允许创建管理员账号")
 	}
 
 	user := &model.User{
@@ -117,15 +120,23 @@ func (s *UserService) CreateUsersBatch(req *model.AdminCreateUsersRequest) (int,
 			continue
 		}
 
-		role := item.Role
+		role := normalizeRole(item.Role)
 		if role == "" {
-			role = "user"
+			role = model.RoleUser
 		}
-		if role != "user" && role != "admin" {
+		if role != model.RoleUser && role != model.RoleAdmin && role != model.RoleSuperAdmin {
 			errorsList = append(errorsList, map[string]interface{}{
 				"index":    i,
 				"username": item.Username,
 				"error":    "无效的角色",
+			})
+			continue
+		}
+		if role != model.RoleUser {
+			errorsList = append(errorsList, map[string]interface{}{
+				"index":    i,
+				"username": item.Username,
+				"error":    "不允许创建管理员账号",
 			})
 			continue
 		}
@@ -259,15 +270,30 @@ func (s *UserService) GetUserList(page, size int) ([]model.User, int64, error) {
 	return s.repo.List(page, size)
 }
 
-// SetUserRole 设置用户角色（管理员）
-func (s *UserService) SetUserRole(userID uint, role string) error {
+// SetUserRole 设置用户角色（仅超级管理员）
+func (s *UserService) SetUserRole(operatorID, userID uint, role string) error {
+	if operatorID == 0 {
+		return errors.New("无效的操作者")
+	}
+	if operatorID == userID {
+		return errors.New("不允许修改自己的角色")
+	}
+
 	user, err := s.repo.GetByID(userID)
 	if err != nil {
 		return errors.New("用户不存在")
 	}
 
-	if role != "user" && role != "admin" {
+	role = normalizeRole(role)
+	if role != model.RoleUser && role != model.RoleAdmin {
 		return errors.New("无效的角色")
+	}
+	currentRole := normalizeRole(user.Role)
+	if currentRole == model.RoleSuperAdmin {
+		return errors.New("超级管理员角色不可修改")
+	}
+	if role == currentRole {
+		return nil
 	}
 
 	user.Role = role
@@ -314,11 +340,17 @@ func (s *UserService) UpdateUserByAdmin(userID uint, req *model.AdminUpdateUserR
 	}
 
 	if req.Role != nil {
-		role := strings.TrimSpace(*req.Role)
-		if role != "user" && role != "admin" {
+		role := normalizeRole(*req.Role)
+		if role != model.RoleUser && role != model.RoleAdmin {
 			return nil, errors.New("无效的角色")
 		}
-		user.Role = role
+		currentRole := normalizeRole(user.Role)
+		if currentRole == model.RoleSuperAdmin {
+			return nil, errors.New("超级管理员角色不可修改")
+		}
+		if role != currentRole {
+			user.Role = role
+		}
 	}
 
 	if req.Password != nil {
@@ -344,7 +376,7 @@ func normalizeAndValidateCreateUserRequest(req *model.AdminCreateUserRequest) er
 	req.Username = strings.TrimSpace(req.Username)
 	req.Email = strings.TrimSpace(req.Email)
 	req.StudentID = strings.TrimSpace(req.StudentID)
-	req.Role = strings.TrimSpace(req.Role)
+	req.Role = normalizeRole(req.Role)
 	req.Group = strings.TrimSpace(req.Group)
 
 	if len(req.Username) < 3 || len(req.Username) > 20 {
@@ -359,4 +391,8 @@ func normalizeAndValidateCreateUserRequest(req *model.AdminCreateUserRequest) er
 		}
 	}
 	return nil
+}
+
+func normalizeRole(role string) string {
+	return strings.ToLower(strings.TrimSpace(role))
 }

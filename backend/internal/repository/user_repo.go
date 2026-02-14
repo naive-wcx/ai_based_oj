@@ -46,6 +46,18 @@ func (r *UserRepository) GetByEmail(email string) (*model.User, error) {
 	return &user, nil
 }
 
+// GetByIDs 根据 ID 列表获取用户
+func (r *UserRepository) GetByIDs(ids []uint) ([]model.User, error) {
+	if len(ids) == 0 {
+		return []model.User{}, nil
+	}
+	var users []model.User
+	if err := r.db.Where("id IN ?", ids).Find(&users).Error; err != nil {
+		return nil, err
+	}
+	return users, nil
+}
+
 // Update 更新用户
 func (r *UserRepository) Update(user *model.User) error {
 	return r.db.Save(user).Error

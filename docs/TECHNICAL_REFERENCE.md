@@ -138,7 +138,7 @@ type User struct {
     Email        string    `json:"email"`
     PasswordHash string    `json:"-"`          // 不输出到 JSON
     StudentID    string    `json:"student_id"`
-    Role         string    `json:"role"`       // "user" | "admin"
+    Role         string    `json:"role"`       // "user" | "admin" | "super_admin"
     Group        string    `json:"group"`
     SolvedCount  int       `json:"solved_count"`
     AcceptedCount int      `json:"accepted_count"`
@@ -397,7 +397,7 @@ func NewUserService() *UserService
 | `ChangePassword(userID uint, oldPassword, newPassword string) error` | 修改个人密码 |
 | `GetRankList(page, size int) ([]UserInfo, int64, error)` | 获取排行榜 |
 | `GetUserList(page, size int) ([]User, int64, error)` | 获取用户列表（管理员） |
-| `SetUserRole(userID uint, role string) error` | 设置用户角色（管理员） |
+| `SetUserRole(operatorID, userID uint, role string) error` | 设置用户角色（仅超级管理员） |
 
 #### 2.4.2 题目服务 (`problem_service.go`)
 
@@ -482,11 +482,13 @@ func NewSubmissionService() *SubmissionService
 |------------|------|
 | `AuthMiddleware()` | 强制 JWT 认证 |
 | `AdminMiddleware()` | 要求管理员权限 |
+| `SuperAdminMiddleware()` | 要求超级管理员权限 |
 | `OptionalAuthMiddleware()` | 可选认证（不强制） |
 | `GetUserID(c *gin.Context) uint` | 从上下文获取用户 ID |
 | `GetUsername(c *gin.Context) string` | 从上下文获取用户名 |
 | `GetRole(c *gin.Context) string` | 从上下文获取角色 |
 | `IsAdmin(c *gin.Context) bool` | 判断是否管理员 |
+| `IsSuperAdmin(c *gin.Context) bool` | 判断是否超级管理员 |
 
 **上下文存储的值**:
 - `userID` (uint) - 用户 ID
@@ -703,7 +705,7 @@ type Claims struct {
 **说明**: 
 - 登录状态下会返回 `has_accepted` 标识用户是否已通过题目
 - 当题目为隐藏题时，仅管理员或参赛用户可访问；固定起止比赛要求已开赛，窗口期比赛要求个人会话已开始；赛后参赛用户仍可访问
-- 进行中的比赛里，非管理员访问隐藏题时不返回该题标签（`tags` 为空）
+- 进行中的比赛里，非管理员访问隐藏题时不返回该题标签与难度（`tags` 为空、`difficulty` 为空）
 
 **成功响应** (200):
 ```json
@@ -1105,7 +1107,7 @@ type Claims struct {
 - `has_submitted` 表示在比赛时间范围内是否提交过该题
 - `timing_mode` 支持 `fixed`（固定起止）与 `window`（窗口期 + 个人固定时长）
 - 窗口期比赛中，用户需先调用 `POST /contest/:id/start` 启动个人比赛会话
-- `my_live_total` / `my_post_total` 分别表示赛时/赛后得分，`my_total` 为两者之和
+- `my_live_total` / `my_post_total` 分别表示赛时/赛后得分，赛后分数采用“订正总分”口径（包含赛时基线）
 
 **成功响应** (200):
 ```json
@@ -1137,8 +1139,7 @@ type Claims struct {
             "remaining_seconds": 5400
         },
         "my_live_total": 160,
-        "my_post_total": 20,
-        "my_total": 180
+        "my_post_total": 180
     }
 }
 ```
@@ -1195,7 +1196,6 @@ type Claims struct {
     "email": "string",        // 邮箱格式，可选
     "password": "string",     // 6-20 字符，必填
     "student_id": "string",   // 可选
-    "role": "user",           // user 或 admin，可选
     "group": "ClassA"         // 分组，可选
 }
 ```
@@ -1230,8 +1230,7 @@ type Claims struct {
             "password": "pass123",
             "email": "",
             "student_id": "2025001",
-            "group": "ClassA",
-            "role": "user"
+            "group": "ClassA"
         }
     ]
 }
@@ -1264,7 +1263,7 @@ type Claims struct {
     "email": "string",        // 可选（可置空）
     "student_id": "string",   // 可选（可置空）
     "group": "ClassA",        // 可选（可置空）
-    "role": "user",           // 可选
+    "role": "user",           // 可选（仅超级管理员可修改）
     "password": "string"      // 可选（重置密码）
 }
 ```
@@ -1317,7 +1316,10 @@ type Claims struct {
 |------|------|------|
 | `board_mode` | string | 榜单模式：`combined`（默认，赛时|赛后）、`live`（赛时）、`post`（赛后） |
 
-**说明**: OI/IOI 赛制均按每题最后一次提交得分汇总
+**说明**:
+- `live` 表示赛时得分
+- `post` 表示订正总分（包含赛时基线）
+- `combined` 视图显示 `live_total | post_total`
 
 **成功响应** (200):
 ```json
@@ -1340,9 +1342,9 @@ type Claims struct {
                 "total": 240,
                 "scores": [80, 80, 80],
                 "live_total": 220,
-                "post_total": 20,
+                "post_total": 240,
                 "live_scores": [80, 80, 60],
-                "post_scores": [0, 0, 20]
+                "post_scores": [80, 80, 80]
             }
         ]
     }
@@ -1364,7 +1366,7 @@ type Claims struct {
 
 #### PUT `/users/:id/role` - 设置用户角色
 
-**认证**: 需要 Bearer Token + 管理员权限
+**认证**: 需要 Bearer Token + 超级管理员权限
 
 **请求体**:
 ```json

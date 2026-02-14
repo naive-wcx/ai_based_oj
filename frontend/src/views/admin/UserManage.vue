@@ -3,7 +3,7 @@
     <div class="page-header">
       <div>
         <h2 class="page-title">用户管理</h2>
-        <p class="page-subtitle">支持账户维护、角色切换与批量导入。</p>
+        <p class="page-subtitle">支持账户维护、管理员授权与批量导入。</p>
       </div>
       <div class="page-actions">
         <el-button type="primary" @click="openCreateDialog">创建用户</el-button>
@@ -39,8 +39,8 @@
         </el-table-column>
         <el-table-column label="角色" width="120">
           <template #default="{ row }">
-            <el-tag :type="row.role === 'admin' ? 'danger' : 'info'">
-              {{ row.role === 'admin' ? '管理员' : '普通用户' }}
+            <el-tag :type="getRoleTagType(row.role)">
+              {{ getRoleLabel(row.role) }}
             </el-tag>
           </template>
         </el-table-column>
@@ -50,19 +50,13 @@
           <template #default="{ row }">
             <el-button size="small" @click="openEditDialog(row)">编辑</el-button>
             <el-button
-              v-if="row.role !== 'admin'"
+              v-if="userStore.isSuperAdmin && row.role !== 'super_admin' && row.id !== userStore.user?.id"
               size="small"
-              type="warning"
-              @click="setRole(row, 'admin')"
+              :type="row.role === 'admin' ? 'warning' : 'danger'"
+              :loading="roleUpdatingId === row.id"
+              @click="handleToggleAdmin(row)"
             >
-              设为管理员
-            </el-button>
-            <el-button
-              v-else
-              size="small"
-              @click="setRole(row, 'user')"
-            >
-              取消管理员
+              {{ row.role === 'admin' ? '取消管理员' : '设为管理员' }}
             </el-button>
           </template>
         </el-table-column>
@@ -97,12 +91,6 @@
         <el-form-item label="分组" prop="group">
           <el-input v-model="createForm.group" placeholder="可选，例如：ClassA" />
         </el-form-item>
-        <el-form-item label="角色" prop="role">
-          <el-select v-model="createForm.role" placeholder="请选择角色">
-            <el-option label="普通用户" value="user" />
-            <el-option label="管理员" value="admin" />
-          </el-select>
-        </el-form-item>
         <el-form-item label="初始密码" prop="password">
           <el-input v-model="createForm.password" type="password" show-password placeholder="请输入初始密码" />
         </el-form-item>
@@ -130,12 +118,6 @@
         <el-form-item label="分组" prop="group">
           <el-input v-model="editForm.group" placeholder="可留空，例如：ClassA" />
         </el-form-item>
-        <el-form-item label="角色" prop="role">
-          <el-select v-model="editForm.role" placeholder="请选择角色">
-            <el-option label="普通用户" value="user" />
-            <el-option label="管理员" value="admin" />
-          </el-select>
-        </el-form-item>
         <el-form-item label="重置密码" prop="password">
           <el-input v-model="editForm.password" type="password" show-password placeholder="留空则不修改" />
         </el-form-item>
@@ -151,24 +133,18 @@
 
     <el-dialog v-model="batchDialogVisible" title="批量导入用户" width="640px" @closed="resetBatchForm">
       <div class="batch-hint">
-        支持 CSV 或 JSON。CSV 默认列顺序：username,password,student_id,email,group,role（后三列可省略，且不支持逗号转义）。
+        支持 CSV 或 JSON。CSV 默认列顺序：username,password,student_id,email,group（后三列可省略，且不支持逗号转义）。
       </div>
       <el-form label-position="top">
         <el-form-item label="默认分组（可选）">
           <el-input v-model="batchForm.defaultGroup" placeholder="为空则不设置" />
-        </el-form-item>
-        <el-form-item label="默认角色（可选）">
-          <el-select v-model="batchForm.defaultRole" placeholder="默认 user">
-            <el-option label="普通用户" value="user" />
-            <el-option label="管理员" value="admin" />
-          </el-select>
         </el-form-item>
         <el-form-item label="数据内容">
           <el-input
             v-model="batchForm.text"
             type="textarea"
             :rows="10"
-            placeholder="username,password,student_id,email,group,role&#10;alice,pass123,2025001,,ClassA,user"
+            placeholder="username,password,student_id,email,group&#10;alice,pass123,2025001,,ClassA"
           />
         </el-form-item>
       </el-form>
@@ -182,12 +158,14 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import { ElMessageBox } from 'element-plus'
 import { message } from '@/utils/message'
 import { adminApi } from '@/api/admin'
+import { useUserStore } from '@/stores/user'
 
 const loading = ref(false)
 const users = ref([])
+const roleUpdatingId = ref(null)
+const userStore = useUserStore()
 
 const pagination = reactive({
   page: 1,
@@ -196,12 +174,24 @@ const pagination = reactive({
 })
 
 const pageAdminCount = computed(
-  () => users.value.filter((user) => user.role === 'admin').length
+  () => users.value.filter((user) => user.role === 'admin' || user.role === 'super_admin').length
 )
 
 const pageSolvedCount = computed(
   () => users.value.reduce((sum, user) => sum + (user.solved_count || 0), 0)
 )
+
+function getRoleLabel(role) {
+  if (role === 'super_admin') return '超级管理员'
+  if (role === 'admin') return '管理员'
+  return '普通用户'
+}
+
+function getRoleTagType(role) {
+  if (role === 'super_admin') return 'warning'
+  if (role === 'admin') return 'danger'
+  return 'info'
+}
 
 const createDialogVisible = ref(false)
 const createFormRef = ref()
@@ -211,7 +201,6 @@ const createForm = reactive({
   email: '',
   student_id: '',
   group: '',
-  role: 'user',
   password: '',
   confirm_password: '',
 })
@@ -225,7 +214,6 @@ const editForm = reactive({
   email: '',
   student_id: '',
   group: '',
-  role: 'user',
   password: '',
   confirm_password: '',
 })
@@ -234,7 +222,6 @@ const editOriginal = reactive({
   email: '',
   student_id: '',
   group: '',
-  role: '',
 })
 
 const batchDialogVisible = ref(false)
@@ -242,7 +229,6 @@ const batching = ref(false)
 const batchForm = reactive({
   text: '',
   defaultGroup: '',
-  defaultRole: 'user',
 })
 
 const confirmPasswordValidator = (rule, value, callback) => {
@@ -315,25 +301,23 @@ async function fetchUsers() {
   }
 }
 
-async function setRole(row, role) {
-  const action = role === 'admin' ? '设为管理员' : '取消管理员'
-  try {
-    await ElMessageBox.confirm(`确定要将用户 "${row.username}" ${action}吗？`, '提示', {
-      type: 'warning',
-    })
-    
-    await adminApi.setUserRole(row.id, role)
-    message.success('设置成功')
-    fetchUsers()
-  } catch (e) {
-    if (e !== 'cancel') {
-      console.error(e)
-    }
-  }
-}
-
 function openCreateDialog() {
   createDialogVisible.value = true
+}
+
+async function handleToggleAdmin(row) {
+  if (!row || row.role === 'super_admin') return
+  roleUpdatingId.value = row.id
+  try {
+    const nextRole = row.role === 'admin' ? 'user' : 'admin'
+    await adminApi.setUserRole(row.id, nextRole)
+    message.success(nextRole === 'admin' ? '已设为管理员' : '已取消管理员')
+    await fetchUsers()
+  } catch (e) {
+    console.error(e)
+  } finally {
+    roleUpdatingId.value = null
+  }
 }
 
 function resetCreateForm() {
@@ -341,7 +325,6 @@ function resetCreateForm() {
   createForm.email = ''
   createForm.student_id = ''
   createForm.group = ''
-  createForm.role = 'user'
   createForm.password = ''
   createForm.confirm_password = ''
   createFormRef.value?.clearValidate()
@@ -358,7 +341,6 @@ async function handleCreate() {
       email: createForm.email,
       student_id: createForm.student_id,
       group: createForm.group,
-      role: createForm.role,
       password: createForm.password,
     })
     message.success('创建成功')
@@ -377,7 +359,6 @@ function openEditDialog(row) {
   editForm.email = row.email || ''
   editForm.student_id = row.student_id || ''
   editForm.group = row.group || ''
-  editForm.role = row.role || 'user'
   editForm.password = ''
   editForm.confirm_password = ''
 
@@ -385,7 +366,6 @@ function openEditDialog(row) {
   editOriginal.email = editForm.email
   editOriginal.student_id = editForm.student_id
   editOriginal.group = editForm.group
-  editOriginal.role = editForm.role
 
   editDialogVisible.value = true
 }
@@ -396,7 +376,6 @@ function resetEditForm() {
   editForm.email = ''
   editForm.student_id = ''
   editForm.group = ''
-  editForm.role = 'user'
   editForm.password = ''
   editForm.confirm_password = ''
   editFormRef.value?.clearValidate()
@@ -411,7 +390,6 @@ async function handleUpdate() {
   if (editForm.email !== editOriginal.email) payload.email = editForm.email
   if (editForm.student_id !== editOriginal.student_id) payload.student_id = editForm.student_id
   if (editForm.group !== editOriginal.group) payload.group = editForm.group
-  if (editForm.role !== editOriginal.role) payload.role = editForm.role
   if (editForm.password) payload.password = editForm.password
 
   if (Object.keys(payload).length === 0) {
@@ -439,7 +417,6 @@ function openBatchDialog() {
 function resetBatchForm() {
   batchForm.text = ''
   batchForm.defaultGroup = ''
-  batchForm.defaultRole = 'user'
 }
 
 function parseBatchInput(text) {
@@ -486,7 +463,6 @@ function parseBatchInput(text) {
       student_id: getValue('student_id', 2),
       email: getValue('email', 3),
       group: getValue('group', 4) || batchForm.defaultGroup,
-      role: getValue('role', 5) || batchForm.defaultRole,
     }
     if (!user.username || !user.password) {
       errors.push(`第 ${i + 1} 行缺少用户名或密码`)

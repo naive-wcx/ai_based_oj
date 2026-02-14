@@ -8,6 +8,7 @@
 ### 1.2 核心特性
 - **传统 OJ 功能**：用户登录与管理、题目管理、代码提交、自动评测、排行榜等
 - **比赛功能**：支持 OI / IOI 赛制，按题目与用户/分组配置参赛范围，支持固定起止与窗口期+个人时长两种计时模式
+- **权限分层**：`super_admin` 与 `admin` 均可进行题目/比赛/系统编辑，仅 `super_admin` 可调整用户管理员身份
 - **AI 智能判题**：调用大模型 API（如 DeepSeek）分析代码，检查是否使用指定算法/语言
 - **灵活配置**：每道题目可独立配置是否启用 AI 判题及具体要求
 - **双重结果**：同时返回测试点评测结果和 AI 分析结果
@@ -212,7 +213,7 @@ oj-system/
         "user": {
             "id": 1,
             "username": "string",
-            "role": "user|admin"
+            "role": "user|admin|super_admin"
         }
     }
 }
@@ -235,7 +236,7 @@ oj-system/
 | GET | `/:id/testcases` | 获取测试点列表 | 管理员 |
 | DELETE | `/:id/testcases` | 清空测试点 | 管理员 |
 
-**隐藏题可见性**：隐藏题仅对管理员或比赛开始后的参赛用户可见，赛后参赛用户仍可访问；进行中的比赛中，非管理员访问隐藏题时不展示题目标签。
+**隐藏题可见性**：隐藏题仅对管理员或比赛开始后的参赛用户可见，赛后参赛用户仍可访问；进行中的比赛中，非管理员访问隐藏题时不展示题目标签与难度。
 
 **上传链路参数（当前实现）**：
 - Nginx：`client_max_body_size 200m`，`proxy_send_timeout/proxy_read_timeout = 600s`
@@ -381,8 +382,7 @@ POST /api/v1/submission
         "remaining_seconds": 5400
     },
     "my_live_total": 180,
-    "my_post_total": 20,
-    "my_total": 180
+    "my_post_total": 180
 }
 ```
 
@@ -391,7 +391,7 @@ POST /api/v1/submission
 - `has_submitted` 表示是否在比赛时间范围内提交过该题
 - `timing_mode` 支持 `fixed`（固定起止）与 `window`（窗口期 + 个人固定时长）
 - 窗口期比赛中，用户需调用 `POST /contest/:id/start` 启动个人计时
-- `my_live_total` / `my_post_total` 分别表示赛时与赛后得分，`my_total` 为两者之和
+- `my_live_total` / `my_post_total` 分别表示赛时与赛后得分（赛后为订正总分口径，包含赛时基线）
 - 管理员排行榜支持 `board_mode=combined|live|post` 三种视图
 
 ### 5.6 统计模块 `/api/v1/statistics`
@@ -417,7 +417,7 @@ POST /api/v1/submission
 | POST | `/users` | 创建用户（管理员分配账号） | 管理员 |
 | POST | `/users/batch` | 批量导入用户 | 管理员 |
 | PUT | `/users/:id` | 更新用户信息 | 管理员 |
-| PUT | `/users/:id/role` | 修改用户角色 | 管理员 |
+| PUT | `/users/:id/role` | 修改用户角色 | 超级管理员 |
 | POST | `/contests` | 创建比赛 | 管理员 |
 | PUT | `/contests/:id` | 更新比赛 | 管理员 |
 | DELETE | `/contests/:id` | 删除比赛 | 管理员 |
@@ -436,7 +436,6 @@ POST /api/v1/admin/users
     "email": "string",         // 邮箱（可选）
     "password": "string",      // 初始密码，6-20 字符
     "student_id": "string",    // 学号（可选）
-    "role": "user",            // user 或 admin（可选）
     "group": "ClassA"          // 分组（可选）
 }
 ```
@@ -451,8 +450,7 @@ POST /api/v1/admin/users/batch
             "password": "pass123",
             "email": "",
             "student_id": "2025001",
-            "group": "ClassA",
-            "role": "user"
+            "group": "ClassA"
         }
     ]
 }
@@ -466,7 +464,7 @@ PUT /api/v1/admin/users/:id
     "email": "string",         // 可选（可置空）
     "student_id": "string",    // 可选（可置空）
     "group": "ClassA",         // 可选（可置空）
-    "role": "user",            // 可选
+    "role": "user",            // 可选（仅超级管理员可修改）
     "password": "string"       // 可选（重置密码）
 }
 ```

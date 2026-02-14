@@ -149,7 +149,8 @@ func (h *UserHandler) SetUserRole(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.SetUserRole(userID, req.Role); err != nil {
+	operatorID := middleware.GetUserID(c)
+	if err := h.service.SetUserRole(operatorID, userID, req.Role); err != nil {
 		c.JSON(http.StatusBadRequest, model.BadRequest(err.Error()))
 		return
 	}
@@ -206,6 +207,10 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, model.BadRequest("参数错误: "+err.Error()))
 		return
+	}
+	// 只有超级管理员可以修改角色，普通管理员更新资料时忽略 role 字段。
+	if !middleware.IsSuperAdmin(c) {
+		req.Role = nil
 	}
 
 	user, err := h.service.UpdateUserByAdmin(userID, &req)

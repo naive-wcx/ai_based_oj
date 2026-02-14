@@ -47,8 +47,23 @@ func AuthMiddleware() gin.HandlerFunc {
 func AdminMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		role, exists := c.Get("role")
-		if !exists || role != "admin" {
+		roleStr, ok := role.(string)
+		if !exists || !ok || !isAdminRole(roleStr) {
 			c.JSON(http.StatusForbidden, model.Forbidden("需要管理员权限"))
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
+// SuperAdminMiddleware 超级管理员权限中间件
+func SuperAdminMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		role, exists := c.Get("role")
+		roleStr, ok := role.(string)
+		if !exists || !ok || !isSuperAdminRole(roleStr) {
+			c.JSON(http.StatusForbidden, model.Forbidden("需要超级管理员权限"))
 			c.Abort()
 			return
 		}
@@ -104,5 +119,18 @@ func GetRole(c *gin.Context) string {
 
 // IsAdmin 检查是否为管理员
 func IsAdmin(c *gin.Context) bool {
-	return GetRole(c) == "admin"
+	return isAdminRole(GetRole(c))
+}
+
+// IsSuperAdmin 检查是否为超级管理员
+func IsSuperAdmin(c *gin.Context) bool {
+	return isSuperAdminRole(GetRole(c))
+}
+
+func isAdminRole(role string) bool {
+	return role == "admin" || role == "super_admin"
+}
+
+func isSuperAdminRole(role string) bool {
+	return role == "super_admin"
 }

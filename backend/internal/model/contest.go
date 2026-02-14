@@ -67,15 +67,17 @@ type ContestListItem struct {
 
 // ContestLeaderboardEntry 比赛排行榜项
 type ContestLeaderboardEntry struct {
-	UserID   uint  `json:"user_id"`
-	Username string `json:"username"`
-	Group    string `json:"group"`
-	Total    int    `json:"total"`
-	Scores   []int  `json:"scores"`
-	LiveTotal int   `json:"live_total"`
-	PostTotal int   `json:"post_total"`
-	LiveScores []int `json:"live_scores,omitempty"`
-	PostScores []int `json:"post_scores,omitempty"`
+	UserID         uint       `json:"user_id"`
+	Username       string     `json:"username"`
+	Group          string     `json:"group"`
+	Total          int        `json:"total"`
+	Scores         []int      `json:"scores"`
+	LiveTotal      int        `json:"live_total"`
+	PostTotal      int        `json:"post_total"`
+	LiveScores     []int      `json:"live_scores,omitempty"`
+	PostScores     []int      `json:"post_scores,omitempty"`
+	StartedAt      *time.Time `json:"started_at,omitempty"`
+	ElapsedSeconds int64      `json:"elapsed_seconds,omitempty"`
 }
 
 type ContestSessionState struct {
