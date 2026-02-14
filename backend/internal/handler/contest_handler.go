@@ -16,13 +16,13 @@ import (
 )
 
 type ContestHandler struct {
-	service *service.ContestService
+	service        *service.ContestService
 	submissionRepo *repository.SubmissionRepository
 }
 
 func NewContestHandler() *ContestHandler {
 	return &ContestHandler{
-		service: service.NewContestService(),
+		service:        service.NewContestService(),
 		submissionRepo: repository.NewSubmissionRepository(),
 	}
 }
@@ -111,7 +111,12 @@ func (h *ContestHandler) GetByID(c *gin.Context) {
 
 	var myLiveTotal *int
 	var myPostTotal *int
+	var mySubmissionCount *int
 	if userID > 0 && hasStarted {
+		if count, err := h.service.CountUserLiveSubmissions(contest, userID, now); err == nil {
+			mySubmissionCount = &count
+		}
+
 		showScore := strings.ToLower(contest.Type) == "ioi" || !inLive
 		if showScore {
 			liveStart := contest.StartAt
@@ -123,46 +128,47 @@ func (h *ContestHandler) GetByID(c *gin.Context) {
 				liveEnd = *sessionState.EndAt
 			}
 
-				if liveEnd.After(now) {
-					liveEnd = now
-				}
-				liveMap, err := h.submissionRepo.GetUserLastScoresInRange(userID, []uint(contest.ProblemIDs), liveStart, liveEnd)
-				if err == nil {
-					liveTotal := 0
-					for _, pid := range contest.ProblemIDs {
-						liveTotal += liveMap[pid]
-					}
-					myLiveTotal = &liveTotal
-
-					// 赛后分数口径：订正总分（包含赛时基线）。
-					correctedPostTotal := liveTotal
-					postStart := liveEnd.Add(time.Millisecond)
-					if !postStart.After(now) {
-						postMap, err := h.submissionRepo.GetUserLastScoresInRange(userID, []uint(contest.ProblemIDs), postStart, now)
-						if err == nil {
-							postTotal := 0
-							for _, pid := range contest.ProblemIDs {
-								score := liveMap[pid]
-								if postScore, ok := postMap[pid]; ok {
-									score = postScore
-								}
-								postTotal += score
-							}
-							correctedPostTotal = postTotal
-						}
-					}
-					myPostTotal = &correctedPostTotal
-				}
-
+			if liveEnd.After(now) {
+				liveEnd = now
 			}
+			liveMap, err := h.submissionRepo.GetUserLastScoresInRange(userID, []uint(contest.ProblemIDs), liveStart, liveEnd)
+			if err == nil {
+				liveTotal := 0
+				for _, pid := range contest.ProblemIDs {
+					liveTotal += liveMap[pid]
+				}
+				myLiveTotal = &liveTotal
+
+				// 赛后分数口径：订正总分（包含赛时基线）。
+				correctedPostTotal := liveTotal
+				postStart := liveEnd.Add(time.Millisecond)
+				if !postStart.After(now) {
+					postMap, err := h.submissionRepo.GetUserLastScoresInRange(userID, []uint(contest.ProblemIDs), postStart, now)
+					if err == nil {
+						postTotal := 0
+						for _, pid := range contest.ProblemIDs {
+							score := liveMap[pid]
+							if postScore, ok := postMap[pid]; ok {
+								score = postScore
+							}
+							postTotal += score
+						}
+						correctedPostTotal = postTotal
+					}
+				}
+				myPostTotal = &correctedPostTotal
+			}
+
 		}
+	}
 
 	c.JSON(http.StatusOK, model.Success(gin.H{
-		"contest":  contest,
-		"problems": ordered,
-		"session":  sessionState,
-		"my_live_total": myLiveTotal,
-		"my_post_total": myPostTotal,
+		"contest":             contest,
+		"problems":            ordered,
+		"session":             sessionState,
+		"my_live_total":       myLiveTotal,
+		"my_post_total":       myPostTotal,
+		"my_submission_count": mySubmissionCount,
 	}))
 }
 
@@ -189,9 +195,9 @@ func (h *ContestHandler) StartContest(c *gin.Context) {
 
 	c.JSON(http.StatusOK, model.Success(gin.H{
 		"contest_id": contest.ID,
-		"user_id": userID,
-		"start_at": participation.StartAt,
-		"end_at": participation.EndAt,
+		"user_id":    userID,
+		"start_at":   participation.StartAt,
+		"end_at":     participation.EndAt,
 	}))
 }
 

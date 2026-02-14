@@ -8,6 +8,7 @@
 ### 1.2 核心特性
 - **传统 OJ 功能**：用户登录与管理、题目管理、代码提交、自动评测、排行榜等
 - **比赛功能**：支持 OI / IOI 赛制，按题目与用户/分组配置参赛范围，支持固定起止与窗口期+个人时长两种计时模式
+- **比赛提交上限**：OI / IOI 统一为单场比赛每位用户最多提交 `99` 次
 - **权限分层**：`super_admin` 与 `admin` 均可进行题目/比赛/系统编辑，仅 `super_admin` 可调整用户管理员身份
 - **AI 智能判题**：调用大模型 API（如 DeepSeek）分析代码，检查是否使用指定算法/语言
 - **灵活配置**：每道题目可独立配置是否启用 AI 判题及具体要求
@@ -17,6 +18,10 @@
 - **隐藏题可见性**：固定起止比赛在开赛后可见；窗口期比赛需先点击“开始比赛”后可见；比赛结束后参赛用户仍可访问
 - **UI 体系升级**：采用 Swiss 风格重构，统一状态色、表格对齐规范与后台编辑体验
 - **OI 比赛遮罩机制**：进行中的 OI 比赛对普通用户隐藏详细评测信息，仅显示 `Submitted`
+- **OI 成绩即时可见**：固定起止比赛结束后立即显示总分；窗口赛在用户个人时长结束后立即显示总分
+- **窗口期开赛确认**：窗口期比赛点击“开始比赛”后需二次确认，确认后才进入个人计时
+- **IOI 提交计数展示**：比赛详情页显示“已提交次数/提交上限（99）”
+- **评测中断与删除**：管理员可在提交列表终止指定评测，或删除指定提交记录
 
 ### 1.3 部署环境
 - **开发环境**：Windows 主机 / WSL
@@ -292,7 +297,8 @@ oj-system/
 **说明**：
 - 管理员可查看所有提交；普通用户仅可查看自己的提交。
 - 进行中的 OI 比赛中，普通用户看到的相关提交会被遮罩为 `Submitted`，分数与详细评测信息隐藏。
-- 当前 `simple sandbox` 中，`memory_used` 字段暂不做真实统计（固定为 0）；Linux 运行前会将栈上限设置为 `memory_limit * 1024`（KB），使栈空间与题目空间限制同量级。
+- `memory_used` 按程序运行期间虚拟内存峰值（`VmPeak`）统计（KB）；超过 `memory_limit`（MB）返回 `Memory Limit Exceeded`。
+- Linux 运行前会设置 `ulimit -v` 与 `ulimit -s` 为 `memory_limit * 1024`（KB）。
 
 **提交请求**
 ```json
@@ -365,6 +371,7 @@ POST /api/v1/submission
         "type": "oi",
         "timing_mode": "window",
         "duration_minutes": 180,
+        "submission_limit": 99,
         "start_at": "2026-03-01T08:00:00Z",
         "end_at": "2026-03-01T11:00:00Z",
         "problem_ids": [1, 2, 3],
@@ -383,7 +390,8 @@ POST /api/v1/submission
         "remaining_seconds": 5400
     },
     "my_live_total": 180,
-    "my_post_total": 180
+    "my_post_total": 180,
+    "my_submission_count": 7
 }
 ```
 
@@ -391,8 +399,10 @@ POST /api/v1/submission
 - `has_accepted` 仅在以下情况展示：管理员、IOI 赛制、或比赛已结束
 - `has_submitted` 表示是否在比赛时间范围内提交过该题
 - `timing_mode` 支持 `fixed`（固定起止）与 `window`（窗口期 + 个人固定时长）
-- 窗口期比赛中，用户需调用 `POST /contest/:id/start` 启动个人计时
+- `submission_limit` 为系统固定值 `99`（每位用户每场比赛最多提交 99 次），OI / IOI 均生效
+- 窗口期比赛中，用户点击“开始比赛”后需先确认，再调用 `POST /contest/:id/start` 启动个人计时
 - `my_live_total` / `my_post_total` 分别表示赛时与赛后得分（赛后为订正总分口径，包含赛时基线）
+- `my_submission_count` 为当前用户在该比赛“赛时阶段”的已提交次数（用于 IOI 详情页展示 `已提交/上限`）
 - 管理员排行榜支持 `board_mode=combined|live|post` 三种视图
 - 窗口期比赛中，管理员排行榜在比赛结束前显示用户“剩余时间/未开始”，比赛结束后不显示该列
 - 窗口期比赛中，管理员可重置指定用户的开赛会话，用户状态恢复为“未开始”
@@ -422,6 +432,8 @@ POST /api/v1/submission
 | POST | `/users/batch` | 批量导入用户 | 管理员 |
 | PUT | `/users/:id` | 更新用户信息 | 管理员 |
 | PUT | `/users/:id/role` | 修改用户角色 | 超级管理员 |
+| POST | `/submissions/:id/abort` | 终止指定提交评测 | 管理员 |
+| DELETE | `/submissions/:id` | 删除指定提交记录 | 管理员 |
 | POST | `/contests` | 创建比赛 | 管理员 |
 | PUT | `/contests/:id` | 更新比赛 | 管理员 |
 | DELETE | `/contests/:id` | 删除比赛 | 管理员 |
@@ -736,6 +748,7 @@ CREATE TABLE contests (
     type VARCHAR(10) NOT NULL,            -- oi | ioi
     timing_mode VARCHAR(20) DEFAULT 'fixed', -- fixed | window
     duration_minutes INTEGER DEFAULT 0,    -- 个人比赛时长（分钟）
+    submission_limit INTEGER DEFAULT 99,   -- 比赛总提交次数上限（固定 99）
     start_at DATETIME,
     end_at DATETIME,
     problem_ids TEXT,                     -- JSON 列表
@@ -773,12 +786,12 @@ CREATE TABLE contest_participations (
 | 首页 | `/` | 系统介绍、公告 |
 | 题目列表 | `/problems` | 题目列表、筛选、搜索 |
 | 题目详情 | `/problem/:id` | 题目内容、代码提交 |
-| 比赛列表 | `/contests` | 比赛列表（需登录） |
-| 比赛详情 | `/contest/:id` | 比赛详情、题目列表（需登录） |
-| 提交列表 | `/submissions` | 提交记录（需登录） |
+| 比赛列表 | `/contests` | 比赛列表（需登录，不展示固定提交上限列） |
+| 比赛详情 | `/contest/:id` | 比赛详情、题目列表（需登录；IOI 显示已提交/上限） |
+| 提交列表 | `/submissions` | 提交记录（需登录；管理员可终止评测或删除记录） |
 | 提交详情 | `/submission/:id` | 提交结果、AI 分析详情（需登录） |
 | 排行榜 | `/rank` | 用户排名 |
-| 评测帮助 | `/help` | 公示评测系统环境、编译命令、版本与资源限制规则 |
+| 评测帮助 | `/help` | 公示评测系统环境、编译命令、版本、赛制（OI/IOI、fixed/window）与资源限制规则 |
 | 个人中心 | `/profile` | 个人信息、提交统计 |
 | 登录 | `/login` | 用户登录 |
 | 管理后台 | `/admin/*` | 题目管理、用户管理 |
@@ -803,8 +816,8 @@ components/
 └── views/
     ├── problem/ProblemDetail.vue   # 题面/代码分屏
     ├── submission/SubmissionDetail.vue # 评测仪表盘
-    ├── contest/ContestDetail.vue   # 比赛详情、窗口期开赛与赛时/赛后榜切换
-    ├── Help.vue                    # 评测环境帮助页（系统/命令/资源限制）
+    ├── contest/ContestDetail.vue   # 比赛详情、窗口期开赛、IOI 提交计数与赛时/赛后榜切换
+    ├── Help.vue                    # 帮助页（系统/命令/赛制/资源限制）
     ├── admin/ProblemEdit.vue       # 双栏 Markdown 编辑 + 题面图片上传 + 测试点管理（含上传进度、整题重测）
     └── admin/ContestEdit.vue       # 比赛描述双栏 Markdown 编辑与预览
 ```

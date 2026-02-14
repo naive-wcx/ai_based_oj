@@ -23,6 +23,11 @@ request.interceptors.request.use(
 // 响应拦截器
 request.interceptors.response.use(
   (response) => {
+    const responseType = response?.config?.responseType
+    if (responseType === 'blob' || responseType === 'arraybuffer') {
+      return response
+    }
+
     const res = response.data
     if (res.code !== 200) {
       message.error(res.message || '请求失败')
@@ -30,9 +35,20 @@ request.interceptors.response.use(
     }
     return res
   },
-  (error) => {
+  async (error) => {
     if (error.response) {
       const { status, data } = error.response
+
+      if (data instanceof Blob && data.type?.includes('application/json')) {
+        try {
+          const text = await data.text()
+          const parsed = JSON.parse(text)
+          if (parsed?.message) {
+            message.error(parsed.message)
+            return Promise.reject(error)
+          }
+        } catch (_) {}
+      }
       
       if (status === 401) {
         localStorage.removeItem('token')

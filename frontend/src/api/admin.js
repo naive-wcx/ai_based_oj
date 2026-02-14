@@ -61,6 +61,16 @@ export const adminApi = {
     return request.post(`/admin/contests/${contestId}/users/${userId}/force-finish`)
   },
 
+  // 终止某条提交的评测
+  abortSubmission(id) {
+    return request.post(`/admin/submissions/${id}/abort`)
+  },
+
+  // 删除某条提交记录
+  deleteSubmission(id) {
+    return request.delete(`/admin/submissions/${id}`)
+  },
+
   // 获取 AI 设置
   getAISettings() {
     return request.get('/admin/settings/ai')

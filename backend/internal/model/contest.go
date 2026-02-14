@@ -8,61 +8,63 @@ import (
 
 // Contest 比赛模型
 type Contest struct {
-	ID             uint       `json:"id" gorm:"primaryKey"`
-	Title          string     `json:"title" gorm:"size:200;not null"`
-	Description    string     `json:"description" gorm:"type:text"`
-	Type           string     `json:"type" gorm:"size:10;not null"` // oi | ioi
-	TimingMode     string     `json:"timing_mode" gorm:"size:20;default:fixed"` // fixed | window
-	DurationMinutes int       `json:"duration_minutes"` // 仅 timing_mode=window 时生效
-	StartAt        time.Time  `json:"start_at"`
-	EndAt          time.Time  `json:"end_at"`
-	ProblemIDs     UintList   `json:"problem_ids" gorm:"type:text"`
-	AllowedUsers   UintList   `json:"allowed_users" gorm:"type:text"`
-	AllowedGroups  StringList `json:"allowed_groups" gorm:"type:text"`
-	IsStatsSynced  bool       `json:"is_stats_synced" gorm:"default:false"`
-	CreatedBy      uint       `json:"created_by"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
+	ID              uint       `json:"id" gorm:"primaryKey"`
+	Title           string     `json:"title" gorm:"size:200;not null"`
+	Description     string     `json:"description" gorm:"type:text"`
+	Type            string     `json:"type" gorm:"size:10;not null"`             // oi | ioi
+	TimingMode      string     `json:"timing_mode" gorm:"size:20;default:fixed"` // fixed | window
+	DurationMinutes int        `json:"duration_minutes"`                         // 仅 timing_mode=window 时生效
+	SubmissionLimit int        `json:"submission_limit" gorm:"default:99"`       // 比赛提交总次数上限（固定 99）
+	StartAt         time.Time  `json:"start_at"`
+	EndAt           time.Time  `json:"end_at"`
+	ProblemIDs      UintList   `json:"problem_ids" gorm:"type:text"`
+	AllowedUsers    UintList   `json:"allowed_users" gorm:"type:text"`
+	AllowedGroups   StringList `json:"allowed_groups" gorm:"type:text"`
+	IsStatsSynced   bool       `json:"is_stats_synced" gorm:"default:false"`
+	CreatedBy       uint       `json:"created_by"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
 // ContestCreateRequest 创建比赛请求
 type ContestCreateRequest struct {
-	Title         string    `json:"title" binding:"required,max=200"`
-	Description   string    `json:"description"`
-	Type          string    `json:"type" binding:"required"`
-	TimingMode    string    `json:"timing_mode"`
-	DurationMinutes int     `json:"duration_minutes"`
-	StartAt       time.Time `json:"start_at" binding:"required"`
-	EndAt         time.Time `json:"end_at" binding:"required"`
-	ProblemIDs    []uint    `json:"problem_ids"`
-	AllowedUsers  []uint    `json:"allowed_users"`
-	AllowedGroups []string  `json:"allowed_groups"`
+	Title           string    `json:"title" binding:"required,max=200"`
+	Description     string    `json:"description"`
+	Type            string    `json:"type" binding:"required"`
+	TimingMode      string    `json:"timing_mode"`
+	DurationMinutes int       `json:"duration_minutes"`
+	StartAt         time.Time `json:"start_at" binding:"required"`
+	EndAt           time.Time `json:"end_at" binding:"required"`
+	ProblemIDs      []uint    `json:"problem_ids"`
+	AllowedUsers    []uint    `json:"allowed_users"`
+	AllowedGroups   []string  `json:"allowed_groups"`
 }
 
 // ContestUpdateRequest 更新比赛请求
 type ContestUpdateRequest struct {
-	Title         string    `json:"title" binding:"required,max=200"`
-	Description   string    `json:"description"`
-	Type          string    `json:"type" binding:"required"`
-	TimingMode    string    `json:"timing_mode"`
-	DurationMinutes int     `json:"duration_minutes"`
-	StartAt       time.Time `json:"start_at" binding:"required"`
-	EndAt         time.Time `json:"end_at" binding:"required"`
-	ProblemIDs    []uint    `json:"problem_ids"`
-	AllowedUsers  []uint    `json:"allowed_users"`
-	AllowedGroups []string  `json:"allowed_groups"`
+	Title           string    `json:"title" binding:"required,max=200"`
+	Description     string    `json:"description"`
+	Type            string    `json:"type" binding:"required"`
+	TimingMode      string    `json:"timing_mode"`
+	DurationMinutes int       `json:"duration_minutes"`
+	StartAt         time.Time `json:"start_at" binding:"required"`
+	EndAt           time.Time `json:"end_at" binding:"required"`
+	ProblemIDs      []uint    `json:"problem_ids"`
+	AllowedUsers    []uint    `json:"allowed_users"`
+	AllowedGroups   []string  `json:"allowed_groups"`
 }
 
 // ContestListItem 比赛列表项
 type ContestListItem struct {
-	ID           uint      `json:"id"`
-	Title        string    `json:"title"`
-	Type         string    `json:"type"`
-	TimingMode   string    `json:"timing_mode"`
-	DurationMinutes int    `json:"duration_minutes"`
-	StartAt      time.Time `json:"start_at"`
-	EndAt        time.Time `json:"end_at"`
-	ProblemCount int       `json:"problem_count"`
+	ID              uint      `json:"id"`
+	Title           string    `json:"title"`
+	Type            string    `json:"type"`
+	TimingMode      string    `json:"timing_mode"`
+	DurationMinutes int       `json:"duration_minutes"`
+	SubmissionLimit int       `json:"submission_limit"`
+	StartAt         time.Time `json:"start_at"`
+	EndAt           time.Time `json:"end_at"`
+	ProblemCount    int       `json:"problem_count"`
 }
 
 // ContestLeaderboardEntry 比赛排行榜项

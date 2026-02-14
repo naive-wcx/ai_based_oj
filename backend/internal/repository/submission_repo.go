@@ -28,9 +28,9 @@ func (r *SubmissionRepository) GetByID(id uint) (*model.Submission, error) {
 
 	row := r.db.Table("submissions").
 		Select(
-			"submissions.id, submissions.problem_id, submissions.user_id, submissions.language, submissions.code, " +
-				"submissions.status, submissions.time_used, submissions.memory_used, submissions.score, " +
-				"submissions.testcase_results, submissions.ai_judge_result, submissions.compile_error, " +
+			"submissions.id, submissions.problem_id, submissions.user_id, submissions.language, submissions.code, "+
+				"submissions.status, submissions.time_used, submissions.memory_used, submissions.score, "+
+				"submissions.testcase_results, submissions.ai_judge_result, submissions.compile_error, "+
 				"submissions.final_message, submissions.created_at, problems.title as problem_title, users.username as username",
 		).
 		Joins("LEFT JOIN problems ON submissions.problem_id = problems.id").
@@ -56,7 +56,37 @@ func (r *SubmissionRepository) GetByID(id uint) (*model.Submission, error) {
 
 // Update 更新提交记录
 func (r *SubmissionRepository) Update(submission *model.Submission) error {
-	return r.db.Save(submission).Error
+	result := r.db.Model(&model.Submission{}).
+		Where("id = ?", submission.ID).
+		Updates(map[string]interface{}{
+			"status":           submission.Status,
+			"time_used":        submission.TimeUsed,
+			"memory_used":      submission.MemoryUsed,
+			"score":            submission.Score,
+			"testcase_results": submission.TestcaseResults,
+			"ai_judge_result":  submission.AIJudgeResult,
+			"compile_error":    submission.CompileError,
+			"final_message":    submission.FinalMessage,
+		})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+// DeleteByID 删除提交记录
+func (r *SubmissionRepository) DeleteByID(id uint) error {
+	result := r.db.Delete(&model.Submission{}, id)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
 }
 
 // List 获取提交列表
@@ -293,10 +323,10 @@ func (r *SubmissionRepository) GetUserLastScoresInRange(userID uint, problemIDs 
 	endAt = endAt.In(time.Local)
 
 	type row struct {
-		ProblemID uint `gorm:"column:problem_id"`
-		Score     int  `gorm:"column:score"`
+		ProblemID uint      `gorm:"column:problem_id"`
+		Score     int       `gorm:"column:score"`
 		CreatedAt time.Time `gorm:"column:created_at"`
-		ID        uint `gorm:"column:id"`
+		ID        uint      `gorm:"column:id"`
 	}
 
 	var rows []row
@@ -346,4 +376,34 @@ func (r *SubmissionRepository) GetUserBestScoresInRange(userID uint, problemIDs 
 		result[r.ProblemID] = r.Score
 	}
 	return result, nil
+}
+
+// ListUserSubmissionTimesInRange 获取用户在题目集合中的提交时间列表
+func (r *SubmissionRepository) ListUserSubmissionTimesInRange(userID uint, problemIDs []uint, startAt, endAt time.Time) ([]time.Time, error) {
+	if userID == 0 || len(problemIDs) == 0 {
+		return []time.Time{}, nil
+	}
+	startAt = startAt.In(time.Local)
+	endAt = endAt.In(time.Local)
+
+	type row struct {
+		CreatedAt time.Time `gorm:"column:created_at"`
+	}
+
+	var rows []row
+	err := r.db.Model(&model.Submission{}).
+		Select("created_at").
+		Where("user_id = ? AND problem_id IN ?", userID, problemIDs).
+		Where("created_at >= ? AND created_at <= ?", startAt, endAt).
+		Order("created_at ASC, id ASC").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+
+	times := make([]time.Time, 0, len(rows))
+	for _, row := range rows {
+		times = append(times, row.CreatedAt)
+	}
+	return times, nil
 }

@@ -11,19 +11,19 @@ import (
 )
 
 type ContestService struct {
-	contestRepo *repository.ContestRepository
-	problemRepo *repository.ProblemRepository
-	userRepo    *repository.UserRepository
-	submissionRepo *repository.SubmissionRepository
+	contestRepo       *repository.ContestRepository
+	problemRepo       *repository.ProblemRepository
+	userRepo          *repository.UserRepository
+	submissionRepo    *repository.SubmissionRepository
 	participationRepo *repository.ContestParticipationRepository
 }
 
 func NewContestService() *ContestService {
 	return &ContestService{
-		contestRepo: repository.NewContestRepository(),
-		problemRepo: repository.NewProblemRepository(),
-		userRepo:    repository.NewUserRepository(),
-		submissionRepo: repository.NewSubmissionRepository(),
+		contestRepo:       repository.NewContestRepository(),
+		problemRepo:       repository.NewProblemRepository(),
+		userRepo:          repository.NewUserRepository(),
+		submissionRepo:    repository.NewSubmissionRepository(),
 		participationRepo: repository.NewContestParticipationRepository(),
 	}
 }
@@ -31,6 +31,7 @@ func NewContestService() *ContestService {
 func (s *ContestService) Create(req *model.ContestCreateRequest, createdBy uint) (*model.Contest, error) {
 	timingMode := normalizeContestTimingMode(req.TimingMode)
 	durationMinutes := req.DurationMinutes
+	submissionLimit := contestSubmissionLimitMax
 	if err := validateContestRequest(req.Title, req.Type, req.StartAt, req.EndAt, timingMode, durationMinutes); err != nil {
 		return nil, err
 	}
@@ -50,17 +51,18 @@ func (s *ContestService) Create(req *model.ContestCreateRequest, createdBy uint)
 	}
 
 	contest := &model.Contest{
-		Title:         strings.TrimSpace(req.Title),
-		Description:   strings.TrimSpace(req.Description),
-		Type:          strings.ToLower(strings.TrimSpace(req.Type)),
-		TimingMode:    timingMode,
+		Title:           strings.TrimSpace(req.Title),
+		Description:     strings.TrimSpace(req.Description),
+		Type:            strings.ToLower(strings.TrimSpace(req.Type)),
+		TimingMode:      timingMode,
 		DurationMinutes: durationMinutes,
-		StartAt:       req.StartAt,
-		EndAt:         req.EndAt,
-		ProblemIDs:    model.UintList(problemIDs),
-		AllowedUsers:  model.UintList(allowedUsers),
-		AllowedGroups: model.StringList(allowedGroups),
-		CreatedBy:     createdBy,
+		SubmissionLimit: submissionLimit,
+		StartAt:         req.StartAt,
+		EndAt:           req.EndAt,
+		ProblemIDs:      model.UintList(problemIDs),
+		AllowedUsers:    model.UintList(allowedUsers),
+		AllowedGroups:   model.StringList(allowedGroups),
+		CreatedBy:       createdBy,
 	}
 
 	if err := s.contestRepo.Create(contest); err != nil {
@@ -73,6 +75,7 @@ func (s *ContestService) Create(req *model.ContestCreateRequest, createdBy uint)
 func (s *ContestService) Update(id uint, req *model.ContestUpdateRequest) (*model.Contest, error) {
 	timingMode := normalizeContestTimingMode(req.TimingMode)
 	durationMinutes := req.DurationMinutes
+	submissionLimit := contestSubmissionLimitMax
 	if err := validateContestRequest(req.Title, req.Type, req.StartAt, req.EndAt, timingMode, durationMinutes); err != nil {
 		return nil, err
 	}
@@ -101,6 +104,7 @@ func (s *ContestService) Update(id uint, req *model.ContestUpdateRequest) (*mode
 	contest.Type = strings.ToLower(strings.TrimSpace(req.Type))
 	contest.TimingMode = timingMode
 	contest.DurationMinutes = durationMinutes
+	contest.SubmissionLimit = submissionLimit
 	contest.StartAt = req.StartAt
 	contest.EndAt = req.EndAt
 	contest.ProblemIDs = model.UintList(problemIDs)
@@ -126,6 +130,7 @@ func (s *ContestService) GetByIDForUser(id uint, userID uint, isAdmin bool) (*mo
 	if err != nil {
 		return nil, errors.New("比赛不存在")
 	}
+	contest.SubmissionLimit = normalizeContestSubmissionLimit(contest.SubmissionLimit)
 
 	if isAdmin {
 		return contest, nil
@@ -152,6 +157,7 @@ func (s *ContestService) StartWindowContest(contestID uint, userID uint, isAdmin
 	if err != nil {
 		return nil, nil, errors.New("比赛不存在")
 	}
+	contest.SubmissionLimit = normalizeContestSubmissionLimit(contest.SubmissionLimit)
 	if normalizeContestTimingMode(contest.TimingMode) != contestTimingWindow {
 		return nil, nil, errors.New("当前比赛不是窗口期模式")
 	}
@@ -200,6 +206,7 @@ func (s *ContestService) ResetWindowContestStart(contestID uint, userID uint) (b
 	if err != nil {
 		return false, errors.New("比赛不存在")
 	}
+	contest.SubmissionLimit = normalizeContestSubmissionLimit(contest.SubmissionLimit)
 	if normalizeContestTimingMode(contest.TimingMode) != contestTimingWindow {
 		return false, errors.New("当前比赛不是窗口期模式")
 	}
@@ -224,6 +231,7 @@ func (s *ContestService) ForceFinishContest(contestID uint, userID uint) (bool, 
 	if err != nil {
 		return false, time.Time{}, errors.New("比赛不存在")
 	}
+	contest.SubmissionLimit = normalizeContestSubmissionLimit(contest.SubmissionLimit)
 
 	user, err := s.userRepo.GetByID(userID)
 	if err != nil {
@@ -269,6 +277,7 @@ func (s *ContestService) GetSessionState(contest *model.Contest, userID uint, no
 	if contest == nil || userID == 0 {
 		return state, nil
 	}
+	contest.SubmissionLimit = normalizeContestSubmissionLimit(contest.SubmissionLimit)
 
 	mode := normalizeContestTimingMode(contest.TimingMode)
 	if mode != contestTimingWindow {
@@ -317,6 +326,31 @@ func (s *ContestService) GetSessionState(contest *model.Contest, userID uint, no
 	}
 
 	return state, nil
+}
+
+// CountUserLiveSubmissions 统计用户在该比赛赛时阶段的提交次数。
+func (s *ContestService) CountUserLiveSubmissions(contest *model.Contest, userID uint, now time.Time) (int, error) {
+	if contest == nil || userID == 0 {
+		return 0, nil
+	}
+
+	participation := model.ContestParticipation{}
+	if p, err := s.participationRepo.GetByContestAndUser(contest.ID, userID); err == nil && p != nil {
+		participation = *p
+	}
+
+	times, err := s.submissionRepo.ListUserSubmissionTimesInRange(userID, []uint(contest.ProblemIDs), contest.StartAt, now)
+	if err != nil {
+		return 0, err
+	}
+
+	count := 0
+	for _, submittedAt := range times {
+		if classifySubmissionPhase(contest, participation, submittedAt) == leaderboardPhaseLive {
+			count++
+		}
+	}
+	return count, nil
 }
 
 func (s *ContestService) ListForUser(page, size int, userID uint, isAdmin bool) ([]model.ContestListItem, int64, error) {
@@ -370,6 +404,7 @@ func (s *ContestService) GetLeaderboard(contestID uint, boardMode string) (*mode
 	if err != nil {
 		return nil, nil, nil, "", errors.New("比赛不存在")
 	}
+	contest.SubmissionLimit = normalizeContestSubmissionLimit(contest.SubmissionLimit)
 	boardMode = normalizeLeaderboardMode(boardMode)
 
 	problemIDs := []uint(contest.ProblemIDs)
@@ -392,12 +427,12 @@ func (s *ContestService) GetLeaderboard(contestID uint, boardMode string) (*mode
 	}
 
 	type userEntry struct {
-		userID         uint
-		username       string
-		group          string
-		liveScores     map[uint]int
-		postScores     map[uint]int
-		participation  *model.ContestParticipation
+		userID        uint
+		username      string
+		group         string
+		liveScores    map[uint]int
+		postScores    map[uint]int
+		participation *model.ContestParticipation
 	}
 
 	userMap := make(map[uint]*userEntry)
@@ -410,11 +445,11 @@ func (s *ContestService) GetLeaderboard(contestID uint, boardMode string) (*mode
 			participation := participationMap[user.ID]
 			participationCopy := participation
 			userMap[user.ID] = &userEntry{
-				userID:    user.ID,
-				username:  user.Username,
-				group:     user.Group,
-				liveScores: make(map[uint]int),
-				postScores: make(map[uint]int),
+				userID:        user.ID,
+				username:      user.Username,
+				group:         user.Group,
+				liveScores:    make(map[uint]int),
+				postScores:    make(map[uint]int),
 				participation: &participationCopy,
 			}
 		}
@@ -436,11 +471,11 @@ func (s *ContestService) GetLeaderboard(contestID uint, boardMode string) (*mode
 				participation = &pCopy
 			}
 			entry = &userEntry{
-				userID:   sub.UserID,
-				username: sub.Username,
-				group:    sub.Group,
-				liveScores: make(map[uint]int),
-				postScores: make(map[uint]int),
+				userID:        sub.UserID,
+				username:      sub.Username,
+				group:         sub.Group,
+				liveScores:    make(map[uint]int),
+				postScores:    make(map[uint]int),
 				participation: participation,
 			}
 			userMap[sub.UserID] = entry
@@ -610,15 +645,16 @@ func (s *ContestService) validateProblemIDs(ids []uint) error {
 }
 
 const (
-	contestTimingFixed = "fixed"
-	contestTimingWindow = "window"
+	contestTimingFixed        = "fixed"
+	contestTimingWindow       = "window"
+	contestSubmissionLimitMax = 99
 
-	leaderboardModeLive = "live"
-	leaderboardModePost = "post"
+	leaderboardModeLive     = "live"
+	leaderboardModePost     = "post"
 	leaderboardModeCombined = "combined"
 
-	leaderboardPhaseLive = "live"
-	leaderboardPhasePost = "post"
+	leaderboardPhaseLive   = "live"
+	leaderboardPhasePost   = "post"
 	leaderboardPhaseIgnore = "ignore"
 )
 
@@ -648,6 +684,10 @@ func normalizeContestTimingMode(mode string) string {
 		return contestTimingWindow
 	}
 	return contestTimingFixed
+}
+
+func normalizeContestSubmissionLimit(limit int) int {
+	return contestSubmissionLimitMax
 }
 
 func normalizeLeaderboardMode(mode string) string {
@@ -683,14 +723,15 @@ func buildContestListItems(contests []model.Contest) []model.ContestListItem {
 	items := make([]model.ContestListItem, 0, len(contests))
 	for _, contest := range contests {
 		items = append(items, model.ContestListItem{
-			ID:           contest.ID,
-			Title:        contest.Title,
-			Type:         contest.Type,
-			TimingMode:   normalizeContestTimingMode(contest.TimingMode),
+			ID:              contest.ID,
+			Title:           contest.Title,
+			Type:            contest.Type,
+			TimingMode:      normalizeContestTimingMode(contest.TimingMode),
 			DurationMinutes: contest.DurationMinutes,
-			StartAt:      contest.StartAt,
-			EndAt:        contest.EndAt,
-			ProblemCount: len(contest.ProblemIDs),
+			SubmissionLimit: normalizeContestSubmissionLimit(contest.SubmissionLimit),
+			StartAt:         contest.StartAt,
+			EndAt:           contest.EndAt,
+			ProblemCount:    len(contest.ProblemIDs),
 		})
 	}
 	return items

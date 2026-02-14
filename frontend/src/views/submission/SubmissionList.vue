@@ -126,6 +126,33 @@
               <span class="time-text">{{ formatTime(row.created_at) }}</span>
             </template>
           </el-table-column>
+
+          <el-table-column v-if="userStore.isAdmin" label="操作" width="180" align="center" header-align="center">
+            <template #default="{ row }">
+              <div class="row-actions">
+                <el-button
+                  type="warning"
+                  text
+                  size="small"
+                  :disabled="!canAbort(row)"
+                  :loading="abortingSubmissionId === row.id"
+                  @click.stop="handleAbortSubmission(row)"
+                >
+                  终止评测
+                </el-button>
+                <span class="action-separator">|</span>
+                <el-button
+                  type="danger"
+                  text
+                  size="small"
+                  :loading="deletingSubmissionId === row.id"
+                  @click.stop="handleDeleteSubmission(row)"
+                >
+                  删除记录
+                </el-button>
+              </div>
+            </template>
+          </el-table-column>
         </el-table>
 
         <el-empty v-else description="暂无提交记录" />
@@ -150,7 +177,9 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { submissionApi } from '@/api/submission'
 import { useRoute, useRouter } from 'vue-router'
+import { ElMessageBox } from 'element-plus'
 import { message } from '@/utils/message'
+import { adminApi } from '@/api/admin'
 import { useUserStore } from '@/stores/user'
 
 const loading = ref(true)
@@ -159,6 +188,8 @@ const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 const defaultPageSize = 50
+const abortingSubmissionId = ref(null)
+const deletingSubmissionId = ref(null)
 
 const filters = reactive({
   problem_id: route.query.problem_id || '',
@@ -258,6 +289,75 @@ const handleReset = () => {
 
 function goSubmissionDetail(row) {
   router.push(`/submission/${row.id}`)
+}
+
+function canAbort(row) {
+  return row?.status === 'Pending' || row?.status === 'Judging'
+}
+
+async function handleAbortSubmission(row) {
+  if (!row || !row.id || !canAbort(row)) return
+
+  try {
+    await ElMessageBox.confirm(
+      `确认终止提交 #${row.id} 的评测吗？`,
+      '提示',
+      {
+        confirmButtonText: '确认终止',
+        cancelButtonText: '取消',
+        type: 'warning',
+      }
+    )
+  } catch {
+    return
+  }
+
+  abortingSubmissionId.value = row.id
+  try {
+    const res = await adminApi.abortSubmission(row.id)
+    message.success(res.message || '终止成功')
+    await fetchSubmissions()
+  } catch (e) {
+    console.error(e)
+  } finally {
+    if (abortingSubmissionId.value === row.id) {
+      abortingSubmissionId.value = null
+    }
+  }
+}
+
+async function handleDeleteSubmission(row) {
+  if (!row || !row.id) return
+
+  try {
+    await ElMessageBox.confirm(
+      `确认删除提交 #${row.id} 吗？该操作不可恢复。`,
+      '提示',
+      {
+        confirmButtonText: '确认删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+      }
+    )
+  } catch {
+    return
+  }
+
+  deletingSubmissionId.value = row.id
+  try {
+    const res = await adminApi.deleteSubmission(row.id)
+    message.success(res.message || '删除成功')
+    if (submissions.value.length === 1 && pagination.page > 1) {
+      pagination.page -= 1
+    }
+    await fetchSubmissions()
+  } catch (e) {
+    console.error(e)
+  } finally {
+    if (deletingSubmissionId.value === row.id) {
+      deletingSubmissionId.value = null
+    }
+  }
 }
 
 onMounted(() => {
@@ -414,6 +514,17 @@ onMounted(() => {
   margin-top: 30px;
   display: flex;
   justify-content: center;
+}
+
+.row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.action-separator {
+  color: var(--swiss-text-tertiary, #9ca3af);
+  font-size: 12px;
 }
 
 @media (max-width: 1024px) {

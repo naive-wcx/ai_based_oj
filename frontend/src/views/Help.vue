@@ -2,12 +2,27 @@
   <div class="help-page">
     <section class="hero">
       <h1>评测环境帮助</h1>
-      <p>本页用于公示 OJ 判题环境与资源限制规则，避免“本地能过、线上不过”的环境差异问题。</p>
+      <p>这里是做题和比赛时会用到的规则说明。</p>
     </section>
 
     <el-card class="card" shadow="never">
       <template #header>
-        <div class="card-title">系统环境</div>
+        <div class="card-title">比赛怎么判</div>
+      </template>
+      <ul class="rules">
+        <li><strong>OI 赛制</strong>：比赛进行中普通用户仅显示 `Submitted`，详细结果赛后查看。</li>
+        <li><strong>OI 总分可见时机</strong>：固定起止模式在比赛结束后可见；窗口模式在你的个人时长结束后可见。</li>
+        <li><strong>IOI 赛制</strong>：按题目得分计分，赛时可查看分数与通过情况。</li>
+        <li><strong>固定起止（fixed）</strong>：所有人使用同一比赛开始和结束时间。</li>
+        <li><strong>窗口模式（window）</strong>：在窗口期内点击“开始比赛”后，进入个人计时。</li>
+        <li><strong>窗口模式提示</strong>：没点“开始比赛”前，不会进入个人计时。</li>
+        <li><strong>提交次数上限</strong>：每场比赛每位用户最多提交 99 次。</li>
+      </ul>
+    </el-card>
+
+    <el-card class="card" shadow="never">
+      <template #header>
+        <div class="card-title">评测环境参数</div>
       </template>
       <div class="kv-grid">
         <div class="kv-item">
@@ -16,15 +31,23 @@
         </div>
         <div class="kv-item">
           <div class="k">判题沙箱</div>
-          <div class="v">simple sandbox（当前后端实现）</div>
+          <div class="v">simple sandbox</div>
         </div>
         <div class="kv-item">
-          <div class="k">工作目录</div>
-          <div class="v">`./data/sandbox/{submission_id}`</div>
+          <div class="k">栈空间设置</div>
+          <div class="v">Linux 下运行前会按 `memory_limit * 1024`（KB）设置 `ulimit -s`</div>
         </div>
         <div class="kv-item">
-          <div class="k">输出比较规则</div>
-          <div class="v">忽略行尾空格与首尾空白，统一换行符后比较</div>
+          <div class="k">虚拟内存限制</div>
+          <div class="v">Linux 下运行前会按 `memory_limit * 1024`（KB）设置 `ulimit -v`</div>
+        </div>
+        <div class="kv-item">
+          <div class="k">内存统计</div>
+          <div class="v">按程序运行期间虚拟内存峰值（VmPeak）统计，显示单位为 KB</div>
+        </div>
+        <div class="kv-item">
+          <div class="k">编译超时</div>
+          <div class="v">30 秒</div>
         </div>
       </div>
     </el-card>
@@ -41,26 +64,22 @@
         <el-table-column prop="version" label="编译器/运行时版本（当前环境）" min-width="240" />
       </el-table>
       <p class="tip">
-        说明：命令与 `backend/internal/judge/sandbox/sandbox.go` 一致；版本以线上评测机实际安装为准。
+        版本以评测机实际安装环境为准。
       </p>
     </el-card>
 
     <el-card class="card" shadow="never">
       <template #header>
-        <div class="card-title">时间、内存与栈空间规则</div>
+        <div class="card-title">判题细则</div>
       </template>
-      <el-alert type="warning" :closable="false" show-icon>
-        当前 `simple sandbox` 不做真实内存统计，`memory_used` 固定为 0（KB）；但会在 Linux 下设置栈上限。
-      </el-alert>
       <ul class="rules">
         <li>时间限制：按题目 `time_limit`（ms）判定，运行超时返回 `TLE`。</li>
-        <li>内存限制：当前实现未对进程总内存做硬限制；但 `memory_limit` 会用于设置栈空间上限。</li>
-        <li>栈空间：Linux 评测机会在运行前执行 `ulimit -s`，设置为 `memory_limit * 1024`（KB），与题目空间限制同量级。</li>
+        <li>内存限制：按题目 `memory_limit`（MB）限制虚拟内存，超过限制返回 `Memory Limit Exceeded`。</li>
+        <li>内存统计：`memory_used` 显示程序运行期间虚拟内存峰值（VmPeak，KB）。</li>
+        <li>栈空间：运行前会执行 `ulimit -s = memory_limit * 1024`（KB）。</li>
+        <li>虚拟内存限制：运行前会执行 `ulimit -v = memory_limit * 1024`（KB）。</li>
         <li>编译超时：编译阶段超时上限为 30 秒。</li>
       </ul>
-      <p class="tip">
-        如后续切换到 isolate/docker 沙箱，上述内存与栈规则会变化，届时会同步更新本页。
-      </p>
     </el-card>
   </div>
 </template>

@@ -117,3 +117,57 @@ func (h *SubmissionHandler) GetMySubmissions(c *gin.Context) {
 
 	c.JSON(http.StatusOK, model.Success(data))
 }
+
+// AbortSubmission 终止提交评测（管理员）
+// POST /api/v1/admin/submissions/:id/abort
+func (h *SubmissionHandler) AbortSubmission(c *gin.Context) {
+	id := getUintParam(c, "id")
+	if id == 0 {
+		c.JSON(http.StatusBadRequest, model.BadRequest("提交 ID 无效"))
+		return
+	}
+
+	aborted, submission, err := h.service.AbortByAdmin(id)
+	if err != nil {
+		if err.Error() == "提交不存在" {
+			c.JSON(http.StatusNotFound, model.NotFound(err.Error()))
+			return
+		}
+		c.JSON(http.StatusBadRequest, model.BadRequest(err.Error()))
+		return
+	}
+
+	msg := "该提交当前不在评测中，无需终止"
+	if aborted {
+		msg = "已终止该提交评测"
+	}
+
+	c.JSON(http.StatusOK, model.SuccessMessage(msg, gin.H{
+		"id":      id,
+		"status":  submission.Status,
+		"aborted": aborted,
+	}))
+}
+
+// DeleteSubmission 删除提交记录（管理员）
+// DELETE /api/v1/admin/submissions/:id
+func (h *SubmissionHandler) DeleteSubmission(c *gin.Context) {
+	id := getUintParam(c, "id")
+	if id == 0 {
+		c.JSON(http.StatusBadRequest, model.BadRequest("提交 ID 无效"))
+		return
+	}
+
+	if err := h.service.DeleteByAdmin(id); err != nil {
+		if err.Error() == "提交不存在" {
+			c.JSON(http.StatusNotFound, model.NotFound(err.Error()))
+			return
+		}
+		c.JSON(http.StatusBadRequest, model.BadRequest(err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, model.SuccessMessage("删除提交成功", gin.H{
+		"id": id,
+	}))
+}

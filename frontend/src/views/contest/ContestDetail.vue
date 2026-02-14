@@ -51,6 +51,16 @@
 	        </div>
 	        <div class="stat-divider"></div>
 	        <div class="stat-card">
+	          <div class="stat-label">提交上限</div>
+	          <div class="stat-value">{{ contest.submission_limit ?? 99 }}</div>
+	        </div>
+	        <div class="stat-divider" v-if="showIoiSubmissionCount"></div>
+	        <div class="stat-card" v-if="showIoiSubmissionCount">
+	          <div class="stat-label">已提交/上限</div>
+	          <div class="stat-value">{{ mySubmissionCount != null ? `${mySubmissionCount}/${contest.submission_limit ?? 99}` : '-' }}</div>
+	        </div>
+	        <div class="stat-divider"></div>
+	        <div class="stat-card">
 	          <div class="stat-label">我的赛时|赛后</div>
 	          <div class="stat-value time-value">
 	            {{ myLiveTotal != null || myPostTotal != null ? `${myLiveTotal ?? 0} | ${myPostTotal ?? 0}` : '-' }}
@@ -245,6 +255,7 @@ const contest = ref(null)
 const problems = ref([])
 const myLiveTotal = ref(null)
 const myPostTotal = ref(null)
+const mySubmissionCount = ref(null)
 const sessionState = ref(null)
 const userStore = useUserStore()
 const leaderboardLoading = ref(false)
@@ -266,6 +277,10 @@ const canStartWindowContest = computed(() =>
 
 const showUserRemaining = computed(() =>
   !userStore.isAdmin && !!sessionState.value?.in_live
+)
+
+const showIoiSubmissionCount = computed(() =>
+  !userStore.isAdmin && String(contest.value?.type || '').toLowerCase() === 'ioi'
 )
 
 const showAdminWindowRemaining = computed(() => {
@@ -351,6 +366,7 @@ async function fetchContest() {
     sessionState.value = res.data.session || null
     myLiveTotal.value = res.data.my_live_total ?? null
     myPostTotal.value = res.data.my_post_total ?? null
+    mySubmissionCount.value = res.data.my_submission_count ?? null
     leaderboardEntries.value = []
     leaderboardProblemIds.value = []
     if (userStore.isAdmin) {
@@ -408,6 +424,19 @@ function setupCountdownTimer() {
 
 async function handleStartContest() {
   if (!canStartWindowContest.value) return
+  try {
+    await ElMessageBox.confirm(
+      '确认开始比赛后将立即开始个人计时，无法撤销。是否继续？',
+      '开始比赛确认',
+      {
+        confirmButtonText: '确认开始',
+        cancelButtonText: '取消',
+        type: 'warning',
+      }
+    )
+  } catch {
+    return
+  }
   startingContest.value = true
   try {
     await contestApi.start(route.params.id)

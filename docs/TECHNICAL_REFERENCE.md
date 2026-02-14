@@ -369,6 +369,7 @@ func NewSubmissionRepository() *SubmissionRepository
 | `Create(submission *Submission) error` | 创建提交 |
 | `GetByID(id uint) (*Submission, error)` | 根据 ID 获取 |
 | `Update(submission *Submission) error` | 更新提交 |
+| `DeleteByID(id uint) error` | 删除提交 |
 | `List(page, size int, problemID, userID uint, status string) ([]SubmissionListItem, int64, error)` | 分页列表 |
 | `GetPendingSubmissions(limit int) ([]Submission, error)` | 获取待判题提交 |
 | `UpdateStatus(id uint, status string) error` | 更新状态 |
@@ -930,6 +931,10 @@ type Claims struct {
 
 **限流**: 每分钟最多 10 次
 
+**比赛限制**:
+- 若该提交命中比赛赛时计分上下文（OI/IOI，`fixed/window`），会校验该用户在该比赛内的赛时提交总次数。
+- 当赛时提交总次数达到上限（固定 `99` 次）时，接口返回 400 并拒绝提交。
+
 **请求体**:
 ```json
 {
@@ -962,6 +967,7 @@ type Claims struct {
 **认证**: 需要 Bearer Token（管理员可查看所有，普通用户仅能查看本人）
 **说明**:
 - 进行中的 OI 比赛内，普通用户查看本人提交时会被遮罩为 `Submitted`，并隐藏分数、测试点、AI 结果与编译信息；管理员不受影响。
+- 窗口赛中，当用户个人时长结束后，该用户提交会立即解除遮罩并可查看分数与详情。
 
 **成功响应** (200):
 ```json
@@ -1009,6 +1015,7 @@ type Claims struct {
 **认证**: 需要 Bearer Token（管理员可查看所有，普通用户仅能查看本人）
 **说明**:
 - 进行中的 OI 比赛内，普通用户列表中的相关提交会显示为 `Submitted`，`score/time_used/memory_used` 被置为 0；管理员不受影响。
+- 窗口赛中，当用户个人时长结束后，该用户提交列表会立即显示真实分数。
 
 **查询参数**:
 | 参数 | 类型 | 说明 |
@@ -1090,6 +1097,7 @@ type Claims struct {
                 "type": "oi",
                 "timing_mode": "window",
                 "duration_minutes": 180,
+                "submission_limit": 99,
                 "start_at": "2026-03-01T08:00:00Z",
                 "end_at": "2026-03-01T11:00:00Z",
                 "problem_count": 5
@@ -1106,8 +1114,11 @@ type Claims struct {
 - `has_accepted` 仅在以下情况展示：管理员、IOI 赛制、或比赛已结束；进行中的 OI 对普通用户不展示通过信息
 - `has_submitted` 表示在比赛时间范围内是否提交过该题
 - `timing_mode` 支持 `fixed`（固定起止）与 `window`（窗口期 + 个人固定时长）
-- 窗口期比赛中，用户需先调用 `POST /contest/:id/start` 启动个人比赛会话
+- `submission_limit` 为比赛总提交次数上限（每位用户固定 `99`），OI 与 IOI 赛制均生效
+- OI 赛制下，固定起止在全局结束后显示个人总分；窗口模式在个人时长结束后立即显示个人总分
+- 窗口期比赛中，用户点击“开始比赛”后会先弹出二次确认，确认后调用 `POST /contest/:id/start` 启动个人比赛会话
 - `my_live_total` / `my_post_total` 分别表示赛时/赛后得分，赛后分数采用“订正总分”口径（包含赛时基线）
+- `my_submission_count` 表示当前用户在该比赛赛时阶段的已提交次数（用于 IOI 详情页显示 `已提交/上限`）
 
 **成功响应** (200):
 ```json
@@ -1121,6 +1132,7 @@ type Claims struct {
             "type": "oi",
             "timing_mode": "window",
             "duration_minutes": 180,
+            "submission_limit": 99,
             "start_at": "2026-03-01T08:00:00Z",
             "end_at": "2026-03-01T11:00:00Z",
             "problem_ids": [1, 2, 3],
@@ -1139,7 +1151,8 @@ type Claims struct {
             "remaining_seconds": 5400
         },
         "my_live_total": 160,
-        "my_post_total": 180
+        "my_post_total": 180,
+        "my_submission_count": 7
     }
 }
 ```
@@ -1324,6 +1337,23 @@ type Claims struct {
 - `timing_mode=window`：将该用户会话 `end_at` 立即截断为当前时间。
 - `timing_mode=fixed`：为该用户写入个人结束时间（不改变比赛全局结束时间），该用户后续提交按赛后口径计分。
 - 该操作为幂等操作：若用户已处于结束状态，会返回“已结束/无需更新”语义结果。
+
+#### POST `/submissions/:id/abort` - 终止指定提交评测（管理员）
+
+**认证**: 需要 Bearer Token + 管理员权限
+
+**说明**:
+- 当提交状态为 `Pending/Judging` 时，接口会标记终止并尝试立即中断评测进程。
+- 终止后该提交状态更新为 `System Error`，并写入终止说明。
+- 若提交已完成，接口返回“无需终止”语义成功响应。
+
+#### DELETE `/submissions/:id` - 删除指定提交记录（管理员）
+
+**认证**: 需要 Bearer Token + 管理员权限
+
+**说明**:
+- 删除前会先请求终止该提交对应评测，防止卡住评测机。
+- 会删除数据库记录，以及对应代码目录与沙箱目录。
 
 #### GET `/contests/:id/leaderboard` - 比赛排行榜（管理员）
 
@@ -1537,6 +1567,7 @@ type Claims struct {
 | type | VARCHAR(10) | 赛制：oi/ioi |
 | timing_mode | VARCHAR(20) | 计时模式：fixed/window |
 | duration_minutes | INTEGER | 窗口期个人比赛时长（分钟） |
+| submission_limit | INTEGER | 比赛总提交次数上限（每位用户，固定 99） |
 | start_at | DATETIME | 开始时间 |
 | end_at | DATETIME | 结束时间 |
 | problem_ids | TEXT | 题目 ID 列表（JSON） |
@@ -1698,8 +1729,9 @@ type ExecuteResult struct {
 #### 资源限制说明（当前 `simple sandbox` 实现）
 
 - 时间限制：按题目 `time_limit`（ms）检查，超时返回 `TLE`。
-- 内存限制：当前实现未做真实进程内存统计与硬限制，`ExecuteResult.Memory` 固定为 `0`。
-- 栈空间限制：Linux 下运行前使用 `ulimit -s` 设置为 `memory_limit * 1024`（KB），栈上限与题目空间限制同量级。
+- 内存统计：`ExecuteResult.Memory` 按程序运行期间虚拟内存峰值（`VmPeak`）统计，单位 KB（Linux 通过读取 `/proc/<pid>/status` 监控）。
+- 内存限制：当虚拟内存峰值超过题目 `memory_limit`（MB）时，返回 `Memory Limit Exceeded`。
+- Linux 下运行前会设置 `ulimit -v` 与 `ulimit -s` 为 `memory_limit * 1024`（KB）。
 - 编译超时：编译阶段使用固定 30 秒超时（`context.WithTimeout(..., 30*time.Second)`）。
 
 ### 5.4 判题主逻辑 (`judge/judger.go`)
@@ -1880,7 +1912,7 @@ IF AI 判定未通过:
 | `AIJudgeResult` | `components/submission/AIJudgeResult.vue` | AI 判题结果展示 |
 | `TestcaseResults` | `components/submission/TestcaseResults.vue` | 测试点结果展示 |
 | `MarkdownPreview` | `components/common/MarkdownPreview.vue` | Markdown 预览（支持 LaTeX） |
-| `Help` | `views/Help.vue` | 评测环境帮助页（系统/命令/资源限制） |
+| `Help` | `views/Help.vue` | 帮助页（系统/命令/赛制/资源限制） |
 | `Settings` | `views/admin/Settings.vue` | 系统设置页面 |
 
 ### 7.5 当前 UI 设计要点
@@ -1892,8 +1924,12 @@ IF AI 判定未通过:
 - 提交详情与比赛详情使用指标仪表盘风格，突出状态、分数、时间与内存信息。
 - 管理后台 `ProblemEdit` 支持 Markdown 双栏编辑预览、题面图片上传并按目标字段插入、单文件/Zip 上传进度、整题重测。
 - 管理后台 `ContestEdit` 的比赛描述支持与题目管理一致的双栏 Markdown 编辑/预览。
+- 比赛列表页不显示固定提交上限列；比赛详情页在 IOI 赛制下展示“已提交/上限（99）”。
 - 比赛详情页在窗口期模式下支持“开始比赛”会话状态展示；管理员排行榜支持 `赛时|赛后 / 赛时 / 赛后` 切换与对应导出。
+- 窗口期“开始比赛”按钮包含二次确认弹窗，确认后才会启动个人计时会话。
+- 帮助页新增赛制说明：OI / IOI 与 fixed / window 的口径，以及提交总次数上限规则。
 - 比赛详情管理员操作支持：窗口期显示 `重置开始 | 终止比赛`，固定起止显示 `终止比赛`；其中“终止比赛”为红色文本按钮。
+- 提交列表在管理员视角新增操作：`终止评测 | 删除记录`。
 
 ---
 

@@ -51,9 +51,22 @@ func Start(cfg *config.Config) {
 
 // Handle 处理判题任务
 func (j *Judger) Handle(task *queue.JudgeTask) {
-	submission := task.Submission
+	submission, err := j.submissionService.GetByIDForJudge(task.Submission.ID)
+	if err != nil {
+		sandbox.ClearSubmissionAbortRequest(task.Submission.ID)
+		log.Printf("[Judger] 跳过任务，提交不存在: submission_id=%d", task.Submission.ID)
+		return
+	}
+	if submission.Status != model.StatusPending {
+		sandbox.ClearSubmissionAbortRequest(submission.ID)
+		log.Printf("[Judger] 跳过任务，状态已变化: submission_id=%d, status=%s", submission.ID, submission.Status)
+		return
+	}
+
 	problem := task.Problem
 	testcases := task.Testcases
+	defer sandbox.ClearSubmissionAbortRequest(submission.ID)
+	defer sandbox.CleanWorkDir(sandbox.GetWorkDir(submission.ID))
 
 	log.Printf("[Judger] 开始判题: submission_id=%d, problem_id=%d", submission.ID, problem.ID)
 
@@ -81,6 +94,17 @@ func (j *Judger) Handle(task *queue.JudgeTask) {
 	}
 	submission.TimeUsed = maxTime
 	submission.MemoryUsed = maxMemory
+
+	if sandbox.IsSubmissionAbortRequested(submission.ID) {
+		submission.Status = model.StatusSystemError
+		submission.Score = 0
+		submission.FinalMessage = "管理员已终止该提交评测"
+		if err := j.submissionService.UpdateResult(submission); err != nil {
+			log.Printf("[Judger] 保存终止结果失败: %v", err)
+		}
+		log.Printf("[Judger] 判题终止: submission_id=%d", submission.ID)
+		return
+	}
 
 	// 2. AI 评测（如果启用）
 	if problem.AIJudgeConfig != nil && problem.AIJudgeConfig.Enabled {
@@ -118,10 +142,6 @@ func (j *Judger) Handle(task *queue.JudgeTask) {
 		log.Printf("[Judger] 保存结果失败: %v", err)
 	}
 
-	// 清理工作目录
-	workDir := sandbox.GetWorkDir(submission.ID)
-	sandbox.CleanWorkDir(workDir)
-
 	log.Printf("[Judger] 判题完成: submission_id=%d, status=%s, score=%d",
 		submission.ID, submission.Status, submission.Score)
 }
@@ -135,6 +155,22 @@ func (j *Judger) runTestcases(submission *model.Submission, problem *model.Probl
 	outputName := filepath.Base(problem.FileOutputName)
 
 	for i, tc := range testcases {
+		if sandbox.IsSubmissionAbortRequested(submission.ID) {
+			results = append(results, model.TestcaseResult{
+				ID:      i + 1,
+				Status:  model.StatusSystemError,
+				Message: "管理员已终止评测",
+			})
+			for k := i + 1; k < len(testcases); k++ {
+				results = append(results, model.TestcaseResult{
+					ID:      k + 1,
+					Status:  model.StatusSystemError,
+					Message: "管理员已终止评测",
+				})
+			}
+			break
+		}
+
 		// 读取输入输出
 		input, err := os.ReadFile(tc.InputFile)
 		if err != nil {
@@ -182,6 +218,7 @@ func (j *Judger) runTestcases(submission *model.Submission, problem *model.Probl
 			execInput,
 			problem.TimeLimit,
 			problem.MemoryLimit,
+			submission.ID,
 		)
 
 		if err != nil {
@@ -216,6 +253,19 @@ func (j *Judger) runTestcases(submission *model.Submission, problem *model.Probl
 			Status: execResult.Status,
 			Time:   execResult.Time,
 			Memory: execResult.Memory,
+		}
+		if sandbox.IsSubmissionAbortRequested(submission.ID) {
+			result.Status = model.StatusSystemError
+			result.Message = "管理员已终止评测"
+			results = append(results, result)
+			for k := i + 1; k < len(testcases); k++ {
+				results = append(results, model.TestcaseResult{
+					ID:      k + 1,
+					Status:  model.StatusSystemError,
+					Message: "管理员已终止评测",
+				})
+			}
+			break
 		}
 
 		// 如果运行成功，比较输出

@@ -56,7 +56,6 @@
 	              </span>
 	            </template>
 	          </el-table-column>
-	          
 	          <el-table-column label="开始时间" width="180" align="center" header-align="center">
             <template #default="{ row }">
               <span class="time-text">{{ formatDate(row.start_at) }}</span>
