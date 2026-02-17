@@ -153,6 +153,19 @@ func (j *Judger) runTestcases(submission *model.Submission, problem *model.Probl
 	fileIOEnabled := problem.FileIOEnabled && problem.FileInputName != "" && problem.FileOutputName != ""
 	inputName := filepath.Base(problem.FileInputName)
 	outputName := filepath.Base(problem.FileOutputName)
+	if fileIOEnabled {
+		// 文件读写题需要在写入输入文件前确保工作目录存在。
+		if err := os.MkdirAll(workDir, 0755); err != nil {
+			for i := range testcases {
+				results = append(results, model.TestcaseResult{
+					ID:      i + 1,
+					Status:  model.StatusSystemError,
+					Message: "创建工作目录失败",
+				})
+			}
+			return results
+		}
+	}
 
 	for i, tc := range testcases {
 		if sandbox.IsSubmissionAbortRequested(submission.ID) {

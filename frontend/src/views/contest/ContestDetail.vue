@@ -215,8 +215,8 @@
 	            </el-table-column>
             <el-table-column
               v-for="(pid, index) in leaderboardProblemIds"
-              :key="pid"
-              :label="`P${pid}`"
+              :key="`${pid}-${index}`"
+              :label="getContestProblemLabel(index)"
               :min-width="80"
               align="center"
               header-align="center"
@@ -355,6 +355,18 @@ function getScoreClass(score) {
   if (!score) return 'score-gray'
   if (score === 100) return 'score-green'
   return 'score-orange'
+}
+
+function getContestProblemLabel(index) {
+  let value = Number(index) + 1
+  if (!Number.isInteger(value) || value <= 0) return '-'
+  let label = ''
+  while (value > 0) {
+    const remain = (value - 1) % 26
+    label = String.fromCharCode(65 + remain) + label
+    value = Math.floor((value - 1) / 26)
+  }
+  return label
 }
 
 async function fetchContest() {

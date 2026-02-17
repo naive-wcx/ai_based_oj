@@ -437,13 +437,14 @@ func (h *ContestHandler) ExportLeaderboard(c *gin.Context) {
 	header := []string{"user_id", "username", "group"}
 	if boardMode == "combined" {
 		header = append(header, "live_total", "post_total")
-		for _, pid := range problemIDs {
-			header = append(header, fmt.Sprintf("P%d_live", pid), fmt.Sprintf("P%d_post", pid))
+		for i := range problemIDs {
+			label := getContestProblemLabel(i)
+			header = append(header, fmt.Sprintf("%s_live", label), fmt.Sprintf("%s_post", label))
 		}
 	} else {
 		header = append(header, "total")
-		for _, pid := range problemIDs {
-			header = append(header, fmt.Sprintf("P%d", pid))
+		for i := range problemIDs {
+			header = append(header, getContestProblemLabel(i))
 		}
 	}
 	_ = writer.Write(header)
@@ -517,4 +518,18 @@ func buildContestProblemList(
 		})
 	}
 	return result
+}
+
+func getContestProblemLabel(index int) string {
+	if index < 0 {
+		return ""
+	}
+	value := index + 1
+	label := ""
+	for value > 0 {
+		remain := (value - 1) % 26
+		label = string(rune('A'+remain)) + label
+		value = (value - 1) / 26
+	}
+	return label
 }
