@@ -207,8 +207,8 @@ func buildPrompt(problem *model.Problem, code string, language string, aiConfig 
 	if aiConfig.RequiredAlgorithm != "" {
 		sb.WriteString(fmt.Sprintf("- 必须使用的算法：%s\n", aiConfig.RequiredAlgorithm))
 	}
-	if aiConfig.RequiredLanguage != "" {
-		sb.WriteString(fmt.Sprintf("- 必须使用的编程语言：%s\n", aiConfig.RequiredLanguage))
+	if len(aiConfig.RequiredLanguage) > 0 {
+		sb.WriteString(fmt.Sprintf("- 必须使用的编程语言：%s\n", strings.Join(aiConfig.RequiredLanguage, "、")))
 	}
 	if len(aiConfig.ForbiddenFeatures) > 0 {
 		sb.WriteString(fmt.Sprintf("- 禁止使用的特性：%s\n", strings.Join(aiConfig.ForbiddenFeatures, ", ")))

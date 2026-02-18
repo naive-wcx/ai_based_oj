@@ -138,7 +138,7 @@ AI：DeepSeek API
 │ 4. 综合结果                                                  │
 │    - 传统评测未通过 → 返回传统评测结果                        │
 │    - 传统评测通过且 AI 未通过：严格模式 -> WA；非严格仅提示    │
-│    - AI 未通过时最终分数封顶 50                               │
+│    - AI 未通过时最终分数封顶 max_score_if_not_met（默认 50）   │
 └─────────────────────────────────────────────────────────────┘
       │
       ▼
@@ -291,9 +291,10 @@ oj-system/
     "ai_judge_config": {
         "enabled": true,                    // 是否启用 AI 判题
         "required_algorithm": "动态规划",    // 要求使用的算法（可选）
-        "required_language": "C++",         // 要求使用的语言（可选）
+        "required_language": ["C++"],       // 要求使用的语言（可多选，可选）
         "forbidden_features": ["STL sort"], // 禁止使用的特性（可选）
-        "custom_prompt": "额外的判题说明"    // 自定义 prompt（可选）
+        "custom_prompt": "额外的判题说明",    // 自定义 prompt（可选）
+        "max_score_if_not_met": 50          // AI 未通过时最高得分（可选，默认 50）
     }
 }
 ```
@@ -640,17 +641,18 @@ Headers:
 |--------|------|------|
 | `enabled` | bool | 是否启用 AI 判题 |
 | `required_algorithm` | string | 要求使用的算法（如"动态规划"、"DFS"、"贪心"等） |
-| `required_language` | string | 要求使用的语言 |
+| `required_language` | []string | 要求使用的语言（可多选，支持 C / C++ / Python / Java / Go） |
 | `forbidden_features` | []string | 禁止使用的特性（如"STL sort"、"递归"等） |
 | `custom_prompt` | string | 自定义判题说明 |
 | `strict_mode` | bool | 严格模式：AI 判定失败则直接 WA |
+| `max_score_if_not_met` | int（可选） | AI 未通过时最高得分上限（0-100），默认 50 |
 
 ### 6.5 评分修正规则
 
 当题目启用 AI 判题且 **AI 判定未满足要求** 时，最终得分会进行封顶处理：
 
 ```
-score = min(score, 50)
+score = min(score, max_score_if_not_met)  // max_score_if_not_met 默认 50
 ```
 
 ---

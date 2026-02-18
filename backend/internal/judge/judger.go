@@ -131,8 +131,9 @@ func (j *Judger) Handle(task *queue.JudgeTask) {
 	// 计算得分
 	baseScore := j.calculateScore(testcaseResults, submission.Status == model.StatusAccepted)
 	if submission.AIJudgeResult != nil && !submission.AIJudgeResult.Passed {
-		if baseScore > 50 {
-			baseScore = 50
+		cap := problem.AIJudgeConfig.GetMaxScoreIfNotMet()
+		if baseScore > cap {
+			baseScore = cap
 		}
 	}
 	submission.Score = baseScore

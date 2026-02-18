@@ -26,8 +26,8 @@
                     <li v-if="problem.ai_judge_config.required_algorithm">
                         <strong>指定算法:</strong> {{ problem.ai_judge_config.required_algorithm }}
                     </li>
-                    <li v-if="problem.ai_judge_config.required_language">
-                        <strong>指定语言:</strong> {{ problem.ai_judge_config.required_language }}
+                    <li v-if="problem.ai_judge_config.required_language?.length">
+                        <strong>指定语言:</strong> {{ problem.ai_judge_config.required_language.join('、') }}
                     </li>
                     <li v-if="problem.ai_judge_config.forbidden_features?.length">
                         <strong>禁用特性:</strong> {{ problem.ai_judge_config.forbidden_features.join(', ') }}

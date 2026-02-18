@@ -58,7 +58,7 @@ func (s *SubmissionService) Submit(req *model.SubmissionCreateRequest, userID ui
 
 	// 检查 AI 判题的语言要求
 	if problem.AIJudgeConfig != nil && problem.AIJudgeConfig.Enabled {
-		if problem.AIJudgeConfig.RequiredLanguage != "" {
+		if len(problem.AIJudgeConfig.RequiredLanguage) > 0 {
 			// 只是记录，不在提交时拒绝
 		}
 	}

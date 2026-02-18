@@ -90,10 +90,19 @@ func (s *StringList) Scan(value interface{}) error {
 type AIJudgeConfig struct {
 	Enabled            bool     `json:"enabled"`
 	RequiredAlgorithm  string   `json:"required_algorithm,omitempty"`
-	RequiredLanguage   string   `json:"required_language,omitempty"`
+	RequiredLanguage   []string `json:"required_language,omitempty"`
 	ForbiddenFeatures  []string `json:"forbidden_features,omitempty"`
 	CustomPrompt       string   `json:"custom_prompt,omitempty"`
 	StrictMode         bool     `json:"strict_mode"`
+	MaxScoreIfNotMet   *int     `json:"max_score_if_not_met,omitempty"` // AI 未通过时最高得分，nil 时默认 50
+}
+
+// GetMaxScoreIfNotMet 获取 AI 未通过时的最高得分，未设置时默认 50
+func (c *AIJudgeConfig) GetMaxScoreIfNotMet() int {
+	if c == nil || c.MaxScoreIfNotMet == nil {
+		return 50
+	}
+	return *c.MaxScoreIfNotMet
 }
 
 func (c *AIJudgeConfig) Value() (driver.Value, error) {

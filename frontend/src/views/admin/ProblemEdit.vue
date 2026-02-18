@@ -260,11 +260,12 @@
                   </el-col>
                   <el-col :span="12">
                     <el-form-item label="要求语言">
-                      <el-select v-model="form.ai_judge_config.required_language" clearable style="width: 100%">
-                        <el-option label="不限" value="" />
+                      <el-select v-model="form.ai_judge_config.required_language" multiple clearable placeholder="不限（可多选）" style="width: 100%">
+                        <el-option label="C" value="C" />
                         <el-option label="C++" value="C++" />
                         <el-option label="Python" value="Python" />
                         <el-option label="Java" value="Java" />
+                        <el-option label="Go" value="Go" />
                       </el-select>
                     </el-form-item>
                   </el-col>
@@ -291,6 +292,24 @@
                     :rows="2"
                     placeholder="给 AI 的额外指令"
                   />
+                </el-form-item>
+
+                <el-divider />
+
+                <el-form-item label="AI 未通过时最高得分上限">
+                  <div class="limit-input">
+                    <el-input-number
+                      v-model="form.ai_judge_config.max_score_if_not_met"
+                      :min="0"
+                      :max="100"
+                      :step="5"
+                      style="width: 100%"
+                    />
+                    <div class="unit-text">分</div>
+                  </div>
+                  <div class="hint-text" style="margin-top: 4px">
+                    当 AI 判定不满足要求时，得分最高不超过此值（默认 50）
+                  </div>
                 </el-form-item>
               </div>
             </div>
@@ -457,10 +476,11 @@ const form = reactive({
   ai_judge_config: {
     enabled: false,
     required_algorithm: '',
-    required_language: '',
+    required_language: [],
     forbidden_features: [],
     custom_prompt: '',
     strict_mode: false,
+    max_score_if_not_met: 50,
   },
 })
 
@@ -556,10 +576,11 @@ async function fetchProblem() {
       form.ai_judge_config = {
         enabled: false,
         required_algorithm: '',
-        required_language: '',
+        required_language: [],
         forbidden_features: [],
         custom_prompt: '',
         strict_mode: false,
+        max_score_if_not_met: 50,
       }
     }
     if (!form.samples || form.samples.length === 0) {

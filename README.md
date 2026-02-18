@@ -1,4 +1,4 @@
-# A toy project written by Opus4.5, Codex and Gemini
+# A toy project written by Claude, Codex and Gemini
 
 # OJ 在线评测系统
 
@@ -10,7 +10,7 @@
 - **账号统一分配**：普通用户账号由管理员在后台创建与分配
 - **自助修改密码**：用户可在个人中心修改密码
 - **文件操作题目**：可要求从指定文件读入并输出到指定文件
-- **AI 智能判题**：调用 DeepSeek API 分析代码，检测是否使用指定算法/语言（不满足要求时分数封顶 50）
+- **AI 智能判题**：调用 DeepSeek API 分析代码，检测是否使用指定算法/语言（不满足要求时分数封顶，每题可自定义上限，默认 50）
 - **灵活配置**：每道题目可独立配置 AI 判题要求
 - **现代化 UI**：采用 Swiss 风格重构界面，统一状态色、表格居中与极简导航
 - **分屏题面编辑**：题目详情页支持题面/代码可拖拽分屏，内置 Monaco 编辑器并可调字号与 Tab Size
@@ -287,17 +287,18 @@ ssh <user@server> "sudo systemctl restart oj"
 |--------|------|
 | `enabled` | 是否启用 AI 判题 |
 | `required_algorithm` | 要求使用的算法（如"动态规划"） |
-| `required_language` | 要求使用的语言 |
+| `required_language` | 要求使用的语言（可多选：C / C++ / Python / Java / Go） |
 | `forbidden_features` | 禁止使用的特性 |
 | `custom_prompt` | 自定义判题说明 |
 | `strict_mode` | 严格模式（AI 不通过则 WA）|
+| `max_score_if_not_met` | AI 未通过时最高得分上限（0-100，默认 50）|
 
 ### 工作流程
 
 1. 用户提交代码
 2. 系统先进行传统评测（编译型语言仅编译一次，再运行全部测试点）
 3. 如果题目启用 AI 判题，调用 AI API 分析代码
-4. 综合两者结果给出最终判定；若 AI 判定未满足要求，则分数封顶 50
+4. 综合两者结果给出最终判定；若 AI 判定未满足要求，则分数封顶至题目配置的上限（默认 50）
 
 ## 项目结构
 
