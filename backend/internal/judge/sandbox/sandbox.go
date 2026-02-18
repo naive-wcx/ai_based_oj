@@ -26,6 +26,12 @@ type ExecuteResult struct {
 	ExitCode int
 }
 
+// PrepareResult 预处理结果（写入代码与编译）
+type PrepareResult struct {
+	Status string
+	Error  string
+}
+
 // LanguageConfig 语言配置
 type LanguageConfig struct {
 	SourceFile  string
@@ -70,6 +76,8 @@ var languageConfigs = map[string]LanguageConfig{
 
 // Sandbox 沙箱接口
 type Sandbox interface {
+	Prepare(workDir string, language string, code string) (*PrepareResult, error)
+	Run(workDir string, language string, input string, timeLimit int, memoryLimit int, submissionID uint) (*ExecuteResult, error)
 	Execute(workDir string, language string, code string, input string, timeLimit int, memoryLimit int, submissionID uint) (*ExecuteResult, error)
 }
 
@@ -97,11 +105,11 @@ func NewSimpleSandbox() *SimpleSandbox {
 	return &SimpleSandbox{}
 }
 
-// Execute 执行代码
-func (s *SimpleSandbox) Execute(workDir string, language string, code string, input string, timeLimit int, memoryLimit int, submissionID uint) (*ExecuteResult, error) {
+// Prepare 预处理代码（创建目录、写入代码、按需编译）
+func (s *SimpleSandbox) Prepare(workDir string, language string, code string) (*PrepareResult, error) {
 	config, ok := languageConfigs[language]
 	if !ok {
-		return &ExecuteResult{
+		return &PrepareResult{
 			Status: model.StatusSystemError,
 			Error:  "不支持的编程语言",
 		}, nil
@@ -109,7 +117,7 @@ func (s *SimpleSandbox) Execute(workDir string, language string, code string, in
 
 	// 创建工作目录
 	if err := os.MkdirAll(workDir, 0755); err != nil {
-		return &ExecuteResult{
+		return &PrepareResult{
 			Status: model.StatusSystemError,
 			Error:  "创建工作目录失败",
 		}, err
@@ -118,7 +126,7 @@ func (s *SimpleSandbox) Execute(workDir string, language string, code string, in
 	// 写入源代码
 	sourceFile := filepath.Join(workDir, config.SourceFile)
 	if err := os.WriteFile(sourceFile, []byte(code), 0644); err != nil {
-		return &ExecuteResult{
+		return &PrepareResult{
 			Status: model.StatusSystemError,
 			Error:  "写入源代码失败",
 		}, err
@@ -128,12 +136,52 @@ func (s *SimpleSandbox) Execute(workDir string, language string, code string, in
 	if config.NeedCompile {
 		compileResult := s.compile(workDir, config.CompileCmd)
 		if compileResult.Status != "" {
-			return compileResult, nil
+			return &PrepareResult{
+				Status: compileResult.Status,
+				Error:  compileResult.Error,
+			}, nil
 		}
 	}
 
-	// 执行
+	return &PrepareResult{Status: "OK"}, nil
+}
+
+// Run 执行已预处理好的程序
+func (s *SimpleSandbox) Run(workDir string, language string, input string, timeLimit int, memoryLimit int, submissionID uint) (*ExecuteResult, error) {
+	config, ok := languageConfigs[language]
+	if !ok {
+		return &ExecuteResult{
+			Status: model.StatusSystemError,
+			Error:  "不支持的编程语言",
+		}, nil
+	}
+
 	return s.run(workDir, config.ExecuteCmd, input, timeLimit, memoryLimit, submissionID)
+}
+
+// Execute 执行代码
+func (s *SimpleSandbox) Execute(workDir string, language string, code string, input string, timeLimit int, memoryLimit int, submissionID uint) (*ExecuteResult, error) {
+	prepareResult, err := s.Prepare(workDir, language, code)
+	if err != nil {
+		return &ExecuteResult{
+			Status: model.StatusSystemError,
+			Error:  err.Error(),
+		}, err
+	}
+	if prepareResult == nil {
+		return &ExecuteResult{
+			Status: model.StatusSystemError,
+			Error:  "预处理结果为空",
+		}, nil
+	}
+	if prepareResult.Status != "OK" {
+		return &ExecuteResult{
+			Status: prepareResult.Status,
+			Error:  prepareResult.Error,
+		}, nil
+	}
+
+	return s.Run(workDir, language, input, timeLimit, memoryLimit, submissionID)
 }
 
 // compile 编译代码

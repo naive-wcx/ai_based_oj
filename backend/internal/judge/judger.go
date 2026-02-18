@@ -153,18 +153,56 @@ func (j *Judger) runTestcases(submission *model.Submission, problem *model.Probl
 	fileIOEnabled := problem.FileIOEnabled && problem.FileInputName != "" && problem.FileOutputName != ""
 	inputName := filepath.Base(problem.FileInputName)
 	outputName := filepath.Base(problem.FileOutputName)
-	if fileIOEnabled {
-		// 文件读写题需要在写入输入文件前确保工作目录存在。
-		if err := os.MkdirAll(workDir, 0755); err != nil {
-			for i := range testcases {
-				results = append(results, model.TestcaseResult{
-					ID:      i + 1,
-					Status:  model.StatusSystemError,
-					Message: "创建工作目录失败",
-				})
-			}
-			return results
+
+	// 预处理仅执行一次（写入代码并按需编译），避免每个测试点重复编译。
+	prepareResult, err := j.sandbox.Prepare(workDir, submission.Language, submission.Code)
+	if err != nil {
+		for i := range testcases {
+			results = append(results, model.TestcaseResult{
+				ID:      i + 1,
+				Status:  model.StatusSystemError,
+				Message: err.Error(),
+			})
 		}
+		return results
+	}
+	if prepareResult == nil {
+		for i := range testcases {
+			results = append(results, model.TestcaseResult{
+				ID:      i + 1,
+				Status:  model.StatusSystemError,
+				Message: "预处理失败",
+			})
+		}
+		return results
+	}
+	if prepareResult.Status == model.StatusCompileError {
+		submission.CompileError = prepareResult.Error
+		for i := range testcases {
+			tcResult := model.TestcaseResult{
+				ID:     i + 1,
+				Status: model.StatusCompileError,
+			}
+			if i == 0 {
+				tcResult.Message = "编译错误"
+			}
+			results = append(results, tcResult)
+		}
+		return results
+	}
+	if prepareResult.Status != "OK" {
+		msg := prepareResult.Error
+		if msg == "" {
+			msg = "预处理失败"
+		}
+		for i := range testcases {
+			results = append(results, model.TestcaseResult{
+				ID:      i + 1,
+				Status:  prepareResult.Status,
+				Message: msg,
+			})
+		}
+		return results
 	}
 
 	for i, tc := range testcases {
@@ -224,10 +262,9 @@ func (j *Judger) runTestcases(submission *model.Submission, problem *model.Probl
 		if fileIOEnabled {
 			execInput = ""
 		}
-		execResult, err := j.sandbox.Execute(
+		execResult, err := j.sandbox.Run(
 			workDir,
 			submission.Language,
-			submission.Code,
 			execInput,
 			problem.TimeLimit,
 			problem.MemoryLimit,
@@ -241,24 +278,6 @@ func (j *Judger) runTestcases(submission *model.Submission, problem *model.Probl
 				Message: err.Error(),
 			})
 			continue
-		}
-
-		// 处理编译错误
-		if execResult.Status == model.StatusCompileError {
-			submission.CompileError = execResult.Error
-			results = append(results, model.TestcaseResult{
-				ID:      i + 1,
-				Status:  model.StatusCompileError,
-				Message: "编译错误",
-			})
-			// 编译错误，后续测试点跳过
-			for k := i + 1; k < len(testcases); k++ {
-				results = append(results, model.TestcaseResult{
-					ID:     k + 1,
-					Status: model.StatusCompileError,
-				})
-			}
-			break
 		}
 
 		result := model.TestcaseResult{

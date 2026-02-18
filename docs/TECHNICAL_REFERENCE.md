@@ -1647,7 +1647,7 @@ type Claims struct {
        ↓
 5. judger.Handle()
    - 更新状态为 Judging
-   - 调用 runTestcases() 执行传统评测
+   - 调用 runTestcases() 执行传统评测（预处理/编译一次后逐测试点运行）
    - 如果启用 AI 判题，调用 aiClient.AnalyzeCode()
    - 综合结果，更新 Submission
    - 清理临时文件
@@ -1735,7 +1735,9 @@ type ExecuteResult struct {
 
 | 函数 | 说明 |
 |------|------|
-| `Execute(workDir, language, code, input string, timeLimit, memoryLimit int) (*ExecuteResult, error)` | 执行代码 |
+| `Prepare(workDir, language, code string) (*PrepareResult, error)` | 预处理代码（创建目录、写入源码、按需编译） |
+| `Run(workDir, language, input string, timeLimit, memoryLimit int, submissionID uint) (*ExecuteResult, error)` | 运行已预处理程序（每个测试点调用） |
+| `Execute(workDir, language, code, input string, timeLimit, memoryLimit int, submissionID uint) (*ExecuteResult, error)` | 执行代码（兼容入口，内部复用 `Prepare + Run`） |
 | `CompareOutput(expected, actual string) bool` | 比较输出（忽略空白差异） |
 | `GetWorkDir(submissionID uint) string` | 获取工作目录 |
 | `CleanWorkDir(workDir string)` | 清理工作目录 |
@@ -1747,6 +1749,7 @@ type ExecuteResult struct {
 - 内存限制：当虚拟内存峰值超过题目 `memory_limit`（MB）时，返回 `Memory Limit Exceeded`。
 - Linux 下运行前会设置 `ulimit -v` 与 `ulimit -s` 为 `memory_limit * 1024`（KB）。
 - 编译超时：编译阶段使用固定 30 秒超时（`context.WithTimeout(..., 30*time.Second)`）。
+- 编译策略：编译型语言在单次提交内只执行一次预处理/编译，后续测试点复用产物运行。
 
 ### 5.4 判题主逻辑 (`judge/judger.go`)
 
