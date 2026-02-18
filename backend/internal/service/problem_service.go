@@ -252,7 +252,8 @@ func (s *ProblemService) canAccessHiddenProblem(problemID uint, userID uint) boo
 	if err != nil {
 		return false
 	}
-	if strings.ToLower(user.Role) == "admin" {
+	role := strings.ToLower(strings.TrimSpace(user.Role))
+	if role == model.RoleAdmin || role == model.RoleSuperAdmin {
 		return true
 	}
 
@@ -295,7 +296,8 @@ func (s *ProblemService) shouldHideHiddenProblemTags(problemID uint, userID uint
 	if err != nil {
 		return false
 	}
-	if strings.ToLower(user.Role) == "admin" {
+	role := strings.ToLower(strings.TrimSpace(user.Role))
+	if role == model.RoleAdmin || role == model.RoleSuperAdmin {
 		return false
 	}
 

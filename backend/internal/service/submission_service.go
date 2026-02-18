@@ -365,7 +365,8 @@ func (s *SubmissionService) canAccessHiddenProblem(problemID uint, userID uint) 
 	if err != nil {
 		return false, err
 	}
-	if strings.ToLower(user.Role) == "admin" {
+	role := strings.ToLower(strings.TrimSpace(user.Role))
+	if role == model.RoleAdmin || role == model.RoleSuperAdmin {
 		return true, nil
 	}
 
