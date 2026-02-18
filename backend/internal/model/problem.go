@@ -97,6 +97,39 @@ type AIJudgeConfig struct {
 	MaxScoreIfNotMet   *int     `json:"max_score_if_not_met,omitempty"` // AI 未通过时最高得分，nil 时默认 50
 }
 
+// UnmarshalJSON 自定义反序列化，兼容旧数据中 required_language 为 string 的情况
+func (c *AIJudgeConfig) UnmarshalJSON(data []byte) error {
+	// 使用别名避免无限递归
+	type Alias AIJudgeConfig
+	aux := &struct {
+		RequiredLanguage json.RawMessage `json:"required_language,omitempty"`
+		*Alias
+	}{
+		Alias: (*Alias)(c),
+	}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+
+	// 处理 required_language 兼容：可能是 string 或 []string
+	if len(aux.RequiredLanguage) > 0 {
+		// 尝试解析为 []string
+		var arr []string
+		if err := json.Unmarshal(aux.RequiredLanguage, &arr); err == nil {
+			c.RequiredLanguage = arr
+		} else {
+			// 尝试解析为 string（旧格式）
+			var s string
+			if err := json.Unmarshal(aux.RequiredLanguage, &s); err == nil && s != "" {
+				c.RequiredLanguage = []string{s}
+			}
+		}
+	}
+
+	return nil
+}
+
 // GetMaxScoreIfNotMet 获取 AI 未通过时的最高得分，未设置时默认 50
 func (c *AIJudgeConfig) GetMaxScoreIfNotMet() int {
 	if c == nil || c.MaxScoreIfNotMet == nil {
